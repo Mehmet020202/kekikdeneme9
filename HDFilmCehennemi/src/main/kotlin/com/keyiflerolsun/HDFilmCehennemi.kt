@@ -89,14 +89,22 @@ class HDFilmCehennemi : MainAPI() {
         }
     }
 
+    // Anti-bot headers
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+        "Referer" to mainUrl
+    )
+
     // Domain'i test et ve çalışan domain'i bul
     private suspend fun findWorkingDomain(): String {
         for (domain in alternativeDomains) {
             try {
-                val response = app.get("$domain/", timeout = 10000, interceptor = interceptor) // Timeout artırıldı ve interceptor eklendi
-                if (response.isSuccessful && !response.text.contains("cloudflare", ignoreCase = true)) {
+                val response = app.get("$domain/", timeout = 15000, headers = headers)
+                if (response.isSuccessful) {
                     Log.d("HDCH", "Working domain found: $domain")
-                    mainUrl = domain // mainUrl'i güncelle
+                    mainUrl = domain
                     return domain
                 }
             } catch (e: Exception) {
@@ -104,7 +112,7 @@ class HDFilmCehennemi : MainAPI() {
             }
         }
         Log.d("HDCH", "No working domain found, using default: $mainUrl")
-        return mainUrl // Eğer hiçbiri çalışmazsa varsayılan domain'i kullan
+        return mainUrl
     }
 
     override val mainPage = mainPageOf(
@@ -281,58 +289,309 @@ class HDFilmCehennemi : MainAPI() {
              return hdchLink
         }
 
-    private suspend fun invokeLocalSource(source: String, url: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit ) {
+    private suspend fun invokeLocalSource(source: String, url: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
         try {
-            val workingDomain = findWorkingDomain()
-            Log.d("HDCH", "Processing URL: $url")
+            Log.d("HDCH", "Processing player URL: $url")
             
-            // Farklı video player türlerini dene
+            // URL tipine göre özel işlem
             when {
                 url.contains("rapidrame") -> {
-                    // Rapidrame player
-                    val rapidrameId = url.substringAfter("?rapidrame_id=")
-                    val rapidrameUrl = "${workingDomain}/rplayer/?rapidrame_id=$rapidrameId"
-                    Log.d("HDCH", "Rapidrame URL: $rapidrameUrl")
-                    
-                    val script = app.get(rapidrameUrl, referer = "${workingDomain}/", interceptor = interceptor).document.select("script").find { it.data().contains("sources:") }?.data()
-                    if (script != null) {
-                        processVideoScript(script, workingDomain, source, subtitleCallback, callback)
-                    }
+                    extractRapidrame(url, source, callback)
+                    return
                 }
-                url.contains("mobi") -> {
-                    // Mobi player
-                    val mobiDoc = app.get(url, referer = "${workingDomain}/", interceptor = interceptor).document
-                    val iframeSrc = fixUrlNull(mobiDoc.selectFirst("iframe")?.attr("src")) ?: fixUrlNull(mobiDoc.selectFirst("iframe")?.attr("data-src"))
-                    if (iframeSrc != null) {
-                        Log.d("HDCH", "Mobi iframe: $iframeSrc")
-                        val iframeScript = app.get(iframeSrc, referer = url, interceptor = interceptor).document.select("script").find { it.data().contains("sources:") }?.data()
-                        if (iframeScript != null) {
-                            processVideoScript(iframeScript, workingDomain, source, subtitleCallback, callback)
+                url.contains("closed") || url.contains("closeload") -> {
+                    extractClosed(url, source, callback)
+                    return
+                }
+                url.contains("sibnet") -> {
+                    extractSibnet(url, source, callback)
+                    return
+                }
+            }
+            
+            val playerDoc = app.get(url, headers = headers, referer = mainUrl).document
+            
+            // 1. Script'lerde video kaynağı ara
+            playerDoc.select("script").forEach { script ->
+                val scriptData = script.data()
+                
+                // sources: pattern ara
+                if (scriptData.contains("sources:") || scriptData.contains("file:")) {
+                    val videoMatch = when {
+                        scriptData.contains("file_link=") -> {
+                            getAndUnpack(scriptData).substringAfter("file_link=\"").substringBefore("\";")
+                        }
+                        scriptData.contains("\"file\":") -> {
+                            Regex("""["']file["']\s*:\s*["']([^"']+)["']""").find(scriptData)?.groupValues?.get(1) ?: ""
+                        }
+                        scriptData.contains("source:") -> {
+                            Regex("""source:\s*["']([^"']+)["']""").find(scriptData)?.groupValues?.get(1) ?: ""
+                        }
+                        else -> ""
+                    }
+                    
+                    if (videoMatch.isNotEmpty()) {
+                        val finalUrl = when {
+                            videoMatch.contains("dc_hello(") -> {
+                                val base64Input = videoMatch.substringAfter("dc_hello(\"").substringBefore("\");")
+                                dcHello(base64Input)
+                            }
+                            videoMatch.startsWith("http") -> videoMatch
+                            videoMatch.startsWith("//") -> "https:$videoMatch"
+                            else -> videoMatch
+                        }
+                        
+                        if (finalUrl.startsWith("http")) {
+                            Log.d("HDCH", "Found video URL: $finalUrl")
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = source,
+                                    name = "HDFilmCehennemi",
+                                    url = finalUrl,
+                                    type = ExtractorLinkType.M3U8
+                                ) {
+                                    this.headers = headers
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
                         }
                     }
                 }
-                url.contains("player") -> {
-                    // Direct player
-                    val script = app.get(url, referer = "${workingDomain}/", interceptor = interceptor).document.select("script").find { it.data().contains("sources:") }?.data()
-                    if (script != null) {
-                        processVideoScript(script, workingDomain, source, subtitleCallback, callback)
+            }
+            
+            // 2. iframe'lerde ara
+            playerDoc.select("iframe").forEach { iframe ->
+                val iframeSrc = fixUrlNull(iframe.attr("src")) ?: fixUrlNull(iframe.attr("data-src"))
+                if (iframeSrc != null) {
+                    Log.d("HDCH", "Found nested iframe: $iframeSrc")
+                    try {
+                        val nestedDoc = app.get(iframeSrc, headers = headers, referer = url).document
+                        val nestedScript = nestedDoc.select("script").find { it.data().contains("sources:") || it.data().contains("file:") }?.data()
+                        if (nestedScript != null) {
+                            processVideoScript(nestedScript, mainUrl, source, subtitleCallback, callback)
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Error processing nested iframe: ${e.message}")
                     }
                 }
-                else -> {
-                    // Default player
-                    val script = app.get(url, referer = "${workingDomain}/", interceptor = interceptor).document.select("script").find { it.data().contains("sources:") }?.data()
-                    if (script != null) {
-                        processVideoScript(script, workingDomain, source, subtitleCallback, callback)
-                    } else {
-                        // Alternatif video player yapısını dene
-                        tryAlternativeVideoPlayer(url, workingDomain, source, subtitleCallback, callback)
+            }
+            
+        } catch (e: Exception) {
+            Log.d("HDCH", "Error in invokeLocalSource: ${e.message}")
+        }
+    }
+
+    // Rapidrame extractor
+    private suspend fun extractRapidrame(url: String, source: String, callback: (ExtractorLink) -> Unit) {
+        try {
+            Log.d("HDCH", "Extracting Rapidrame: $url")
+            
+            val doc = app.get(url, headers = headers).document
+            
+            // Rapidrame video script'i ara
+            val script = doc.select("script").find { 
+                it.data().contains("sources:") || it.data().contains("file:") || it.data().contains("video")
+            }?.data()
+            
+            if (script != null) {
+                // Farklı Rapidrame formatları
+                val videoPatterns = listOf(
+                    Regex("""file:\s*["']([^"']+)["']"""),
+                    Regex("""source:\s*["']([^"']+)["']"""),
+                    Regex("""src:\s*["']([^"']+)["']"""),
+                    Regex("""["']file["']\s*:\s*["']([^"']+)["']""")
+                )
+                
+                for (pattern in videoPatterns) {
+                    val match = pattern.find(script)
+                    if (match != null) {
+                        val videoUrl = match.groupValues[1]
+                        if (videoUrl.startsWith("http") && (videoUrl.contains(".m3u8") || videoUrl.contains(".mp4"))) {
+                            Log.d("HDCH", "Rapidrame video found: $videoUrl")
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "$source (Rapidrame)",
+                                    name = "Rapidrame",
+                                    url = videoUrl,
+                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.MP4
+                                ) {
+                                    this.headers = headers + mapOf("Referer" to url)
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
+                        }
+                    }
+                }
+            }
+            
+            // Alternatif: iframe içinde ara
+            doc.select("iframe").forEach { iframe ->
+                val iframeSrc = fixUrlNull(iframe.attr("src"))
+                if (iframeSrc != null) {
+                    try {
+                        val iframeDoc = app.get(iframeSrc, headers = headers, referer = url).document
+                        val iframeScript = iframeDoc.select("script").find { it.data().contains("file:") }?.data()
+                        if (iframeScript != null) {
+                            val videoMatch = Regex("""file:\s*["']([^"']+)["']""").find(iframeScript)
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                if (videoUrl.startsWith("http")) {
+                                    callback.invoke(
+                                        newExtractorLink(
+                                            source = "$source (Rapidrame)",
+                                            name = "Rapidrame",
+                                            url = videoUrl,
+                                            type = ExtractorLinkType.M3U8
+                                        ) {
+                                            this.headers = headers + mapOf("Referer" to iframeSrc)
+                                            this.quality = Qualities.Unknown.value
+                                        }
+                                    )
+                                    return
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Error in Rapidrame iframe: ${e.message}")
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.d("HDCH", "Error in invokeLocalSource: ${e.message}")
-            // Alternatif yöntemi dene
-            tryAlternativeVideoPlayer(url, findWorkingDomain(), source, subtitleCallback, callback)
+            Log.d("HDCH", "Error extracting Rapidrame: ${e.message}")
+        }
+    }
+
+    // Closed/CloseLoad extractor
+    private suspend fun extractClosed(url: String, source: String, callback: (ExtractorLink) -> Unit) {
+        try {
+            Log.d("HDCH", "Extracting Closed: $url")
+            
+            val doc = app.get(url, headers = headers).document
+            
+            // Closed player script'i ara
+            doc.select("script").forEach { script ->
+                val scriptData = script.data()
+                
+                if (scriptData.contains("eval(function") || scriptData.contains("p,a,c,k,e,d")) {
+                    // Packed script'i unpack et
+                    try {
+                        val unpackedScript = getAndUnpack(scriptData)
+                        
+                        val videoPatterns = listOf(
+                            Regex("""file:\s*["']([^"']+)["']"""),
+                            Regex("""source:\s*["']([^"']+)["']"""),
+                            Regex("""src:\s*["']([^"']+)["']""")
+                        )
+                        
+                        for (pattern in videoPatterns) {
+                            val match = pattern.find(unpackedScript)
+                            if (match != null) {
+                                val videoUrl = match.groupValues[1]
+                                if (videoUrl.startsWith("http")) {
+                                    Log.d("HDCH", "Closed video found: $videoUrl")
+                                    callback.invoke(
+                                        newExtractorLink(
+                                            source = "$source (Closed)",
+                                            name = "Closed",
+                                            url = videoUrl,
+                                            type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.MP4
+                                        ) {
+                                            this.headers = headers + mapOf("Referer" to url)
+                                            this.quality = Qualities.Unknown.value
+                                        }
+                                    )
+                                    return
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Error unpacking Closed script: ${e.message}")
+                    }
+                }
+                
+                // Normal script format
+                if (scriptData.contains("file:") || scriptData.contains("source:")) {
+                    val videoMatch = Regex("""(?:file|source):\s*["']([^"']+)["']""").find(scriptData)
+                    if (videoMatch != null) {
+                        val videoUrl = videoMatch.groupValues[1]
+                        if (videoUrl.startsWith("http")) {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "$source (Closed)",
+                                    name = "Closed",
+                                    url = videoUrl,
+                                    type = ExtractorLinkType.M3U8
+                                ) {
+                                    this.headers = headers + mapOf("Referer" to url)
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("HDCH", "Error extracting Closed: ${e.message}")
+        }
+    }
+
+    // Sibnet extractor  
+    private suspend fun extractSibnet(url: String, source: String, callback: (ExtractorLink) -> Unit) {
+        try {
+            Log.d("HDCH", "Extracting Sibnet: $url")
+            
+            val doc = app.get(url, headers = headers).document
+            
+            // Sibnet video URL'ini ara
+            val videoElements = doc.select("video source, video")
+            for (element in videoElements) {
+                val videoSrc = fixUrlNull(element.attr("src"))
+                if (videoSrc != null && videoSrc.startsWith("http")) {
+                    Log.d("HDCH", "Sibnet video found: $videoSrc")
+                    callback.invoke(
+                        newExtractorLink(
+                            source = "$source (Sibnet)",
+                            name = "Sibnet",
+                            url = videoSrc,
+                            type = ExtractorLinkType.MP4
+                        ) {
+                            this.headers = headers + mapOf("Referer" to url)
+                            this.quality = Qualities.Unknown.value
+                        }
+                    )
+                    return
+                }
+            }
+            
+            // Script'lerde ara
+            doc.select("script").forEach { script ->
+                val scriptData = script.data()
+                if (scriptData.contains("player.src") || scriptData.contains("video_url")) {
+                    val videoMatch = Regex("""(?:player\.src|video_url)\s*=\s*["']([^"']+)["']""").find(scriptData)
+                    if (videoMatch != null) {
+                        val videoUrl = videoMatch.groupValues[1]
+                        if (videoUrl.startsWith("http")) {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "$source (Sibnet)",
+                                    name = "Sibnet", 
+                                    url = videoUrl,
+                                    type = ExtractorLinkType.MP4
+                                ) {
+                                    this.headers = headers + mapOf("Referer" to url)
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("HDCH", "Error extracting Sibnet: ${e.message}")
         }
     }
 
@@ -487,69 +746,75 @@ override suspend fun loadLinks(
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
-    Log.d("HDCH", "data » $data")
+    Log.d("HDCH", "Loading links for: $data")
     try {
         val workingDomain = findWorkingDomain()
-        val document = app.get(data, interceptor = interceptor).document
-
-        // Farklı video player yapılarını dene
+        val document = app.get(data, headers = headers).document
         var foundLinks = false
 
-        // 1. Alternative links yapısı
+        // 1. Ana video player yapısı
         document.select("div.alternative-links").map { element ->
             element to element.attr("data-lang").uppercase()
         }.forEach { (element, langCode) ->
             element.select("button.alternative-link").map { button ->
-                button.text().replace("(HDrip Xbet)", "").trim() + " $langCode" to button.attr("data-video")
+                val sourceName = button.text().replace("(HDrip Xbet)", "").trim() + " $langCode"
+                val videoID = button.attr("data-video")
+                sourceName to videoID
             }.forEach { (source, videoID) ->
-                try {
-                    val apiGet = app.get(
-                        "${workingDomain}/video/$videoID/", interceptor = interceptor,
-                        headers = mapOf(
-                            "Content-Type" to "application/json",
-                            "X-Requested-With" to "fetch"
-                        ),
-                        referer = data
-                    ).text
-                    Log.d("HDCH", "Found videoID: $videoID")
-                    var iframe = Regex("""data-src=\\"([^"]+)""").find(apiGet)?.groupValues?.get(1)?.replace("\\", "")
-                    if (iframe == null) {
-                        // Alternatif iframe bulma yöntemi
-                        val iframeMatch = Regex("""iframe.*?src=["']([^"']+)["']""").find(apiGet)
-                        iframe = iframeMatch?.groupValues?.get(1)
-                    }
-                    
-                    if (iframe != null) {
-                        Log.d("HDCH", "$iframe » $iframe")
-                        if (iframe.contains("rapidrame")) {
-                            iframe = "${workingDomain}/rplayer/" + iframe.substringAfter("?rapidrame_id=")
-                        } else if (iframe.contains("mobi")) {
-                            val iframeDoc = Jsoup.parse(apiGet)
-                            iframe = fixUrlNull(iframeDoc.selectFirst("iframe")?.attr("data-src")) ?: iframe
+                if (videoID.isNotEmpty()) {
+                    try {
+                        Log.d("HDCH", "Processing videoID: $videoID")
+                        val videoResponse = app.get(
+                            "${workingDomain}/video/$videoID/",
+                            headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
+                            referer = data
+                        ).text
+                        
+                        // iframe URL'sini bul
+                        val iframePattern = Regex("""(?:data-src|src)=\\?"([^"\\]+)""")
+                        val iframeMatch = iframePattern.find(videoResponse)
+                        var iframe = iframeMatch?.groupValues?.get(1)?.replace("\\", "")
+                        
+                        if (iframe.isNullOrEmpty()) {
+                            // Alternatif iframe pattern
+                            val altPattern = Regex("""iframe.*?src=["']([^"']+)["']""")
+                            iframe = altPattern.find(videoResponse)?.groupValues?.get(1)
                         }
-                        Log.d("HDCH", "$source » $videoID » $iframe")
-                        invokeLocalSource(source, iframe, subtitleCallback, callback)
-                        foundLinks = true
+                        
+                        if (!iframe.isNullOrEmpty()) {
+                            Log.d("HDCH", "Found iframe: $iframe")
+                            
+                            // iframe URL'sini düzelt
+                            val finalIframe = when {
+                                iframe.contains("rapidrame") -> "${workingDomain}/rplayer/?rapidrame_id=" + iframe.substringAfter("rapidrame_id=")
+                                iframe.startsWith("/") -> workingDomain + iframe
+                                !iframe.startsWith("http") -> "${workingDomain}/$iframe"
+                                else -> iframe
+                            }
+                            
+                            invokeLocalSource(source, finalIframe, subtitleCallback, callback)
+                            foundLinks = true
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Error processing video $videoID: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.d("HDCH", "Error processing videoID $videoID: ${e.message}")
                 }
             }
         }
 
-        // 2. Direct video links yapısı
+        // 2. Direct iframe'ler
         if (!foundLinks) {
-            document.select("div.video-player, div.player, div.embed-player").forEach { player ->
-                val iframe = fixUrlNull(player.selectFirst("iframe")?.attr("src")) ?: fixUrlNull(player.selectFirst("iframe")?.attr("data-src"))
-                if (iframe != null) {
-                    Log.d("HDCH", "Found direct player iframe: $iframe")
-                    invokeLocalSource("Direct Player", iframe, subtitleCallback, callback)
+            document.select("iframe").forEach { iframe ->
+                val src = fixUrlNull(iframe.attr("src")) ?: fixUrlNull(iframe.attr("data-src"))
+                if (src != null) {
+                    Log.d("HDCH", "Found direct iframe: $src")
+                    invokeLocalSource("Direct Player", src, subtitleCallback, callback)
                     foundLinks = true
                 }
             }
         }
 
-        // 3. Video element yapısı
+        // 3. Video elementleri
         if (!foundLinks) {
             document.select("video source").forEach { source ->
                 val videoSrc = fixUrlNull(source.attr("src"))
@@ -558,11 +823,11 @@ override suspend fun loadLinks(
                     callback.invoke(
                         newExtractorLink(
                             source = "Direct Video",
-                            name = "Direct Video",
+                            name = "HDFilmCehennemi",
                             url = videoSrc,
                             type = ExtractorLinkType.M3U8
                         ) {
-                            this.headers = mapOf("Referer" to "${workingDomain}/")
+                            this.headers = headers
                             this.quality = Qualities.Unknown.value
                         }
                     )
@@ -571,69 +836,9 @@ override suspend fun loadLinks(
             }
         }
 
-        // 4. JSON data yapısı
-        if (!foundLinks) {
-            document.select("script").filter { it.data().contains("\"file\"") || it.data().contains("\"source\"") }.forEach { script ->
-                try {
-                    val jsonData = script.data()
-                    val fileMatch = Regex("""["']file["']\s*:\s*["']([^"']+)["']""").find(jsonData)
-                    val sourceMatch = Regex("""["']source["']\s*:\s*["']([^"']+)["']""").find(jsonData)
-                    
-                    val videoUrl = fileMatch?.groupValues?.get(1) ?: sourceMatch?.groupValues?.get(1)
-                    if (videoUrl != null && videoUrl.isNotEmpty()) {
-                        Log.d("HDCH", "Found JSON video URL: $videoUrl")
-                        callback.invoke(
-                            newExtractorLink(
-                                source = "JSON Video",
-                                name = "JSON Video",
-                                url = videoUrl,
-                                type = ExtractorLinkType.M3U8
-                            ) {
-                                this.headers = mapOf("Referer" to "${workingDomain}/")
-                                this.quality = Qualities.Unknown.value
-                            }
-                        )
-                        foundLinks = true
-                    }
-                } catch (e: Exception) {
-                    Log.d("HDCH", "Error parsing JSON script: ${e.message}")
-                }
-            }
-        }
-
-        // 5. AJAX video data yapısı
-        if (!foundLinks) {
-            try {
-                val ajaxResponse = app.get(
-                    "${workingDomain}/ajax/video/${data.substringAfterLast("/")}", 
-                    interceptor = interceptor,
-                    headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
-                    referer = data
-                ).text
-                
-                val videoMatch = Regex("""["']video["']\s*:\s*["']([^"']+)["']""").find(ajaxResponse)
-                val videoUrl = videoMatch?.groupValues?.get(1)
-                if (videoUrl != null && videoUrl.isNotEmpty()) {
-                    Log.d("HDCH", "Found AJAX video URL: $videoUrl")
-                    callback.invoke(
-                        newExtractorLink(
-                            source = "AJAX Video",
-                            name = "AJAX Video",
-                            url = videoUrl,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            this.headers = mapOf("Referer" to "${workingDomain}/")
-                            this.quality = Qualities.Unknown.value
-                        }
-                    )
-                    foundLinks = true
-                }
-            } catch (e: Exception) {
-                Log.d("HDCH", "Error with AJAX request: ${e.message}")
-            }
-        }
-
+        Log.d("HDCH", "Found links: $foundLinks")
         return foundLinks
+        
     } catch (e: Exception) {
         Log.d("HDCH", "Error in loadLinks: ${e.message}")
         return false
