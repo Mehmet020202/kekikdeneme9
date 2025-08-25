@@ -201,10 +201,20 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
     var foundLinks = false
     
     try {
+        // IDM tarzı dynamic headers
+        val userAgents = listOf(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         val headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+            "User-Agent" to userAgents.random(),
+            "Accept" to "*/*",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding" to "gzip, deflate, br",
+            "Connection" to "keep-alive",
+            "DNT" to "1",
+            "Cache-Control" to "no-cache",
             "Referer" to mainUrl
         )
         val document = app.get(data, headers = headers).document

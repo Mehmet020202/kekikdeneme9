@@ -48,12 +48,22 @@ class AnizmNet : MainAPI() {
     }
 
     // Anti-bot headers
-    private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+    // IDM tarzı dynamic headers
+    private val userAgents = listOf(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    private fun getHeaders() = mapOf(
+        "User-Agent" to userAgents.random(),
+        "Accept" to "*/*",
+        "Accept-Encoding" to "gzip, deflate, br",
+        "Connection" to "keep-alive",
+        "DNT" to "1",
+        "Cache-Control" to "no-cache",
         "Referer" to mainUrl
     )
+    private val headers = getHeaders()
 
     override val mainPage = mainPageOf(
         "${mainUrl}/son-eklenen" to "🔥 EN SON ANİMELER",

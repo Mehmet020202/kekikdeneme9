@@ -168,9 +168,21 @@ private fun Element.toSearchResult(): SearchResponse? {
         var foundLinks = false
         
         try {
-            val document = app.get(data, headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )).document
+            // IDM tarzı headers
+            val userAgents = listOf(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            val headers = mapOf(
+                "User-Agent" to userAgents.random(),
+                "Accept" to "*/*",
+                "Accept-Encoding" to "gzip, deflate, br",
+                "Connection" to "keep-alive",
+                "DNT" to "1",
+                "Cache-Control" to "no-cache"
+            )
+            val document = app.get(data, headers = headers).document
             
             // 1. Original method - iframe and video parts
             val iframeSrc = document.selectFirst("iframe")?.attr("data-src") ?: document.selectFirst("iframe")?.attr("src") ?: ""
