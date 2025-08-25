@@ -13,6 +13,9 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
 import com.keyiflerolsun.UniversalVideoExtractor
+import com.lagradost.cloudstream3.network.CloudflareKiller
+import android.util.Base64
+import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 
 class AnizmNet : MainAPI() {
     override var mainUrl              = "https://anizm.net"
@@ -22,10 +25,28 @@ class AnizmNet : MainAPI() {
     override val hasQuickSearch       = true
     override val supportedTypes       = setOf(TvType.TvSeries)
 
-    // ! CloudFlare bypass
+    // ! CloudFlare bypass (DiziBox tarzı geliştirildi)
     override var sequentialMainPage = true
-    override var sequentialMainPageDelay       = 150L
-    override var sequentialMainPageScrollDelay = 150L
+    override var sequentialMainPageDelay       = 100L
+    override var sequentialMainPageScrollDelay = 100L
+
+    // ! CloudFlare v2
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller): Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request  = chain.request()
+            val response = chain.proceed(request)
+            val doc      = Jsoup.parse(response.peekBody(10 * 1024).string())
+
+            if (response.code == 503 || doc.selectFirst("meta[name='cloudflare']") != null) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
 
     // Anti-bot headers
     private val headers = mapOf(

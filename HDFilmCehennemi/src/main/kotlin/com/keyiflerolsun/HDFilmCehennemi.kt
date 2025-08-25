@@ -31,6 +31,12 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
+import com.lagradost.cloudstream3.network.CloudflareKiller
+import okhttp3.Interceptor
+import okhttp3.Response
+import org.jsoup.Jsoup
+import android.util.Base64
+import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 import com.lagradost.cloudstream3.toRatingInt
 import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -51,6 +57,29 @@ class HDFilmCehennemi : MainAPI() {
     override var lang                 = "tr"
     override val hasQuickSearch       = true
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries)
+
+    // ! CloudFlare bypass (DiziBox tarzı)
+    override var sequentialMainPage = true        
+    override var sequentialMainPageDelay       = 100L  
+    override var sequentialMainPageScrollDelay = 100L  
+
+    // ! CloudFlare v2
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller): Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request  = chain.request()
+            val response = chain.proceed(request)
+            val doc      = Jsoup.parse(response.peekBody(10 * 1024).string())
+
+            if (response.code == 503 || doc.selectFirst("meta[name='cloudflare']") != null) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
 
     // 2025 Güncel Alternatif domain'ler
     private val alternativeDomains = listOf(
@@ -101,7 +130,17 @@ class HDFilmCehennemi : MainAPI() {
     private suspend fun findWorkingDomain(): String {
         for (domain in alternativeDomains) {
             try {
-                val response = app.get("$domain/", timeout = 15000, headers = headers)
+                val response = app.get(
+                    "$domain/", 
+                    timeout = 15000, 
+                    headers = headers,
+                    cookies = mapOf(
+                        "HDCUser" to "true",
+                        "isTrustedUser" to "true",
+                        "bypass" to "1743289650198"
+                    ),
+                    interceptor = interceptor
+                )
                 if (response.isSuccessful) {
                     Log.d("HDCH", "Working domain found: $domain")
                     mainUrl = domain
@@ -146,7 +185,17 @@ class HDFilmCehennemi : MainAPI() {
         )
         
         try {
-            val doc = app.get(url, headers = headers, referer = workingDomain, interceptor = interceptor)
+            val doc = app.get(
+                url, 
+                headers = headers, 
+                referer = workingDomain,
+                cookies = mapOf(
+                    "HDCUser" to "true",
+                    "isTrustedUser" to "true",
+                    "bypass" to "1743289650198"
+                ),
+                interceptor = interceptor
+            )
             val home: List<SearchResponse>?
             if (!doc.toString().contains("Sayfa Bulunamadı")) {
                 val aa: HDFC = objectMapper.readValue(doc.toString())
@@ -749,7 +798,16 @@ override suspend fun loadLinks(
     Log.d("HDCH", "Loading links for: $data")
     try {
         val workingDomain = findWorkingDomain()
-        val document = app.get(data, headers = headers).document
+        val document = app.get(
+            data, 
+            headers = headers,
+            cookies = mapOf(
+                "HDCUser" to "true",
+                "isTrustedUser" to "true",
+                "bypass" to "1743289650198"
+            ),
+            interceptor = interceptor
+        ).document
         var foundLinks = false
 
         // 1. Ana video player yapısı
@@ -831,6 +889,50 @@ override suspend fun loadLinks(
                             this.quality = Qualities.Unknown.value
                         }
                     )
+                    foundLinks = true
+                }
+            }
+        }
+
+        // DiziBox tarzı alternatif player arama
+        if (!foundLinks) {
+            Log.d("HDCH", "Searching for alternative players...")
+            
+            // Video toolbar alternatiflerini ara
+            document.select("div.video-toolbar option[value], select option[value]").forEach { option ->
+                val altUrl = option.attr("value")
+                if (altUrl.isNotEmpty() && altUrl.startsWith("http")) {
+                    try {
+                        val altDoc = app.get(
+                            altUrl,
+                            headers = headers,
+                            cookies = mapOf(
+                                "HDCUser" to "true",
+                                "isTrustedUser" to "true",
+                                "bypass" to "1743289650198"
+                            ),
+                            interceptor = interceptor
+                        ).document
+                        
+                        // Alternatif sayfa iframe'ini bul
+                        val altIframe = altDoc.selectFirst("div#video-area iframe, iframe")?.attr("src")
+                        if (!altIframe.isNullOrEmpty()) {
+                            Log.d("HDCH", "Found alternative iframe: $altIframe")
+                            invokeLocalSource("Alternative Player", altIframe, subtitleCallback, callback)
+                            foundLinks = true
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Error processing alternative player: ${e.message}")
+                    }
+                }
+            }
+            
+            // Embedded player'lar ara
+            document.select("iframe[src*='player'], iframe[src*='embed'], iframe[data-src*='player']").forEach { iframe ->
+                val iframeSrc = iframe.attr("src").ifEmpty { iframe.attr("data-src") }
+                if (iframeSrc.isNotEmpty()) {
+                    Log.d("HDCH", "Found embedded iframe: $iframeSrc")
+                    invokeLocalSource("Embedded Player", iframeSrc, subtitleCallback, callback)
                     foundLinks = true
                 }
             }
