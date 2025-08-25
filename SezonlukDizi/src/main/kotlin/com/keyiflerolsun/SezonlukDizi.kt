@@ -6,7 +6,9 @@ import android.util.Log
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.extractors.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import java.nio.charset.Charsets
 
 class SezonlukDizi : MainAPI() {
     override var mainUrl              = "https://sezonlukdizi6.com"
@@ -128,6 +130,108 @@ class SezonlukDizi : MainAPI() {
             val iframe = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src")) ?: return@forEach
             Log.d("SZD", "dil»1 | iframe » $iframe")
 
+            // DiziBox tarzı iframe analysis (SezonlukDizi için optimize)
+            try {
+                val iframeDoc = app.get(iframe, headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer" to "${mainUrl}/"
+                )).document
+                
+                // Script'lerde video ara
+                iframeDoc.select("script").forEach { script ->
+                    val scriptData = script.data()
+                    
+                    // CryptoJS AES decrypt (DiziBox tarzı)
+                    val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptData)
+                    if (cryptMatch != null) {
+                        try {
+                            val encryptedData = cryptMatch.groupValues[1]
+                            Log.d("SZD", "Found CryptoJS encrypted data for SezonlukDizi...")
+                            
+                            if (encryptedData.contains("http") && encryptedData.contains(".m3u8")) {
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "AltYazı - ${veri.baslik}",
+                                        name = "CryptoJS Decrypted",
+                                        url = encryptedData,
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.headers = mapOf("Referer" to iframe)
+                                        this.quality = Qualities.P1080.value
+                                    }
+                                )
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("SZD", "CryptoJS decrypt failed: ${e.message}")
+                        }
+                    }
+                    
+                    // Base64 + unescape (DiziBox tarzı)
+                    val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptData)
+                    if (atobMatch != null) {
+                        try {
+                            val encodedData = atobMatch.groupValues[1]
+                            val decodedData = encodedData.decodeUri()
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            
+                            val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                            val videoMatch = videoPattern.find(finalData)
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                Log.d("SZD", "Found SezonlukDizi Base64 decoded video: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "AltYazı - ${veri.baslik}",
+                                        name = "Base64 Decoded",
+                                        url = videoUrl,
+                                        type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    ) {
+                                        this.headers = mapOf("Referer" to iframe)
+                                        this.quality = Qualities.P720.value
+                                    }
+                                )
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("SZD", "Base64 decode failed: ${e.message}")
+                        }
+                    }
+                    
+                    // Standard video patterns
+                    val videoPatterns = listOf(
+                        Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                        Regex("""source:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                        Regex("""src:\s*["']([^"']+\.m3u8[^"']*)["']""")
+                    )
+                    
+                    for (pattern in videoPatterns) {
+                        val match = pattern.find(scriptData)
+                        if (match != null) {
+                            val videoUrl = match.groupValues[1]
+                            if (videoUrl.startsWith("http")) {
+                                Log.d("SZD", "Found SezonlukDizi script video: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "AltYazı - ${veri.baslik}",
+                                        name = "Script Video",
+                                        url = videoUrl,
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.headers = mapOf("Referer" to iframe)
+                                        this.quality = Qualities.P720.value
+                                    }
+                                )
+                                return@forEach
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d("SZD", "DiziBox style extraction failed, falling back to standard...")
+            }
+
+            // Fallback: Standard extraction
             loadExtractor(iframe, "${mainUrl}/", subtitleCallback) { link ->
                 callback.invoke(
                     ExtractorLink(
@@ -164,6 +268,79 @@ class SezonlukDizi : MainAPI() {
             val iframe = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src")) ?: return@forEach
             Log.d("SZD", "dil»0 | iframe » $iframe")
 
+            // DiziBox tarzı iframe analysis (Dublaj için optimize)
+            try {
+                val iframeDoc = app.get(iframe, headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer" to "${mainUrl}/"
+                )).document
+                
+                // Script'lerde video ara
+                iframeDoc.select("script").forEach { script ->
+                    val scriptData = script.data()
+                    
+                    // CryptoJS AES decrypt (DiziBox tarzı)
+                    val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptData)
+                    if (cryptMatch != null) {
+                        try {
+                            val encryptedData = cryptMatch.groupValues[1]
+                            Log.d("SZD", "Found CryptoJS encrypted data for Dublaj...")
+                            
+                            if (encryptedData.contains("http") && encryptedData.contains(".m3u8")) {
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "Dublaj - ${veri.baslik}",
+                                        name = "CryptoJS Decrypted",
+                                        url = encryptedData,
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.headers = mapOf("Referer" to iframe)
+                                        this.quality = Qualities.P1080.value
+                                    }
+                                )
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("SZD", "CryptoJS decrypt failed: ${e.message}")
+                        }
+                    }
+                    
+                    // Base64 + unescape (DiziBox tarzı)
+                    val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptData)
+                    if (atobMatch != null) {
+                        try {
+                            val encodedData = atobMatch.groupValues[1]
+                            val decodedData = encodedData.decodeUri()
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            
+                            val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                            val videoMatch = videoPattern.find(finalData)
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                Log.d("SZD", "Found SezonlukDizi Dublaj Base64 decoded video: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "Dublaj - ${veri.baslik}",
+                                        name = "Base64 Decoded",
+                                        url = videoUrl,
+                                        type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    ) {
+                                        this.headers = mapOf("Referer" to iframe)
+                                        this.quality = Qualities.P720.value
+                                    }
+                                )
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("SZD", "Base64 decode failed: ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d("SZD", "DiziBox style extraction failed for Dublaj, falling back to standard...")
+            }
+
+            // Fallback: Standard extraction
             loadExtractor(iframe, "${mainUrl}/", subtitleCallback) { link ->
                 callback.invoke(
                     ExtractorLink(

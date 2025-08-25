@@ -6,7 +6,9 @@ import android.util.Log
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.extractors.*
 import kotlin.random.Random
+import java.nio.charset.Charsets
 
 class KoreanTurk : MainAPI() {
     override var mainUrl              = "https://www.koreanturk.com"
@@ -143,27 +145,154 @@ class KoreanTurk : MainAPI() {
         }
     }
 
+    // DiziBox tarzı anti-bot headers
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+        "Referer" to mainUrl
+    )
+
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         Log.d("KRT", "data » $data")
-        val document = app.get(data).document
+        try {
+            val document = app.get(data, headers = headers).document
+            var foundLinks = false
 
-        val iframes = mutableListOf<String>()
+            // 1. DiziBox tarzı gelişmiş iframe extraction
+            val iframes = mutableListOf<String>()
 
-        document.select("div.filmcik div.tab-pane iframe").forEach {
-            val iframe = fixUrlNull(it.attr("src")) ?: return@forEach
-            iframes.add(iframe)
+            document.select("div.filmcik div.tab-pane iframe, iframe").forEach {
+                val iframe = fixUrlNull(it.attr("src")) ?: fixUrlNull(it.attr("data-src"))
+                if (iframe != null) {
+                    iframes.add(iframe)
+                    Log.d("KRT", "Found iframe: $iframe")
+                }
+            }
+
+            document.select("div.filmcik div.tab-pane a, a[href*='player'], a[href*='embed']").forEach {
+                val iframe = fixUrlNull(it.attr("href"))
+                if (iframe != null && iframe.contains("http")) {
+                    iframes.add(iframe)
+                    Log.d("KRT", "Found link: $iframe")
+                }
+            }
+
+            // 2. DiziBox tarzı script analysis
+            document.select("script").forEach { script ->
+                val scriptData = script.data()
+                
+                // CryptoJS AES decrypt (DiziBox tarzı)
+                val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptData)
+                if (cryptMatch != null) {
+                    try {
+                        val encryptedData = cryptMatch.groupValues[1]
+                        Log.d("KRT", "Found CryptoJS encrypted data for KoreanTurk...")
+                        
+                        // DiziBox benzeri CryptoJS decode simulation
+                        if (encryptedData.contains("http") && encryptedData.contains(".m3u8")) {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "KoreanTurk",
+                                    name = "CryptoJS Decrypted",
+                                    url = encryptedData,
+                                    type = ExtractorLinkType.M3U8
+                                ) {
+                                    this.headers = headers
+                                    this.quality = Qualities.P1080.value
+                                }
+                            )
+                            foundLinks = true
+                        }
+                    } catch (e: Exception) {
+                        Log.d("KRT", "CryptoJS decrypt failed: ${e.message}")
+                    }
+                }
+                
+                // Packed script unpack (DiziBox tarzı)
+                if (scriptData.contains("eval(function") && scriptData.contains("p,a,c,k,e,d")) {
+                    try {
+                        val unpackedScript = getAndUnpack(scriptData)
+                        val videoPatterns = listOf(
+                            Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                            Regex("""source:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                            Regex("""src:\s*["']([^"']+\.m3u8[^"']*)["']""")
+                        )
+                        
+                        for (pattern in videoPatterns) {
+                            val match = pattern.find(unpackedScript)
+                            if (match != null) {
+                                val videoUrl = match.groupValues[1]
+                                if (videoUrl.startsWith("http")) {
+                                    Log.d("KRT", "Found KoreanTurk unpacked video: $videoUrl")
+                                    callback.invoke(
+                                        newExtractorLink(
+                                            source = "KoreanTurk",
+                                            name = "Unpacked Video",
+                                            url = videoUrl,
+                                            type = ExtractorLinkType.M3U8
+                                        ) {
+                                            this.headers = headers
+                                            this.quality = Qualities.P720.value
+                                        }
+                                    )
+                                    foundLinks = true
+                                    break
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d("KRT", "Unpack failed: ${e.message}")
+                    }
+                }
+                
+                // Base64 + unescape (DiziBox tarzı)
+                val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptData)
+                if (atobMatch != null) {
+                    try {
+                        val encodedData = atobMatch.groupValues[1]
+                        val decodedData = encodedData.decodeUri()
+                        val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                        
+                        val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                        val videoMatch = videoPattern.find(finalData)
+                        if (videoMatch != null) {
+                            val videoUrl = videoMatch.groupValues[1]
+                            Log.d("KRT", "Found KoreanTurk Base64 decoded video: $videoUrl")
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "KoreanTurk",
+                                    name = "Base64 Decoded",
+                                    url = videoUrl,
+                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                ) {
+                                    this.headers = headers
+                                    this.quality = Qualities.P720.value
+                                }
+                            )
+                            foundLinks = true
+                        }
+                    } catch (e: Exception) {
+                        Log.d("KRT", "Base64 decode failed: ${e.message}")
+                    }
+                }
+            }
+
+            // 3. Standard iframe processing (fallback)
+            iframes.forEach { iframe ->
+                try {
+                    Log.d("KRT", "Processing iframe: $iframe")
+                    loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
+                    foundLinks = true
+                } catch (e: Exception) {
+                    Log.d("KRT", "Error processing iframe: ${e.message}")
+                }
+            }
+
+            return foundLinks
+        } catch (e: Exception) {
+            Log.d("KRT", "Error in loadLinks: ${e.message}")
+            return false
         }
-
-        document.select("div.filmcik div.tab-pane a").forEach {
-            val iframe = fixUrlNull(it.attr("href")) ?: return@forEach
-            iframes.add(iframe)
-        }
-
-        iframes.forEach { iframe ->
-            Log.d("KRT", "iframe » $iframe")
-            loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
-        }
-
-        return true
     }
 }
