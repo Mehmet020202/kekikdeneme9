@@ -26,6 +26,14 @@ class AnizmNet : MainAPI() {
     override var sequentialMainPageDelay       = 150L
     override var sequentialMainPageScrollDelay = 150L
 
+    // Anti-bot headers
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+        "Referer" to mainUrl
+    )
+
     // ! CloudFlare v2
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
@@ -57,8 +65,61 @@ class AnizmNet : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         try {
             val url = if (page == 1) request.data else "${request.data}?sayfa=$page"
-            val document = app.get(url, interceptor = interceptor).document
-            val home = document.select("div.anime-card, div.anime-item, article.anime, .anime-list-item").mapNotNull { it.toSearchResult() }
+            Log.d("ANIZM", "Loading main page: $url")
+            
+            val document = app.get(url, headers = headers, interceptor = interceptor).document
+            
+            // AnizmNet için daha geniş selector'lar
+            val selectors = listOf(
+                "div.anime-card", "div.anime-item", "article.anime", ".anime-list-item",
+                ".anime", ".card", ".item", ".post", ".entry", ".media",
+                "div[class*='anime']", "div[class*='item']", "div[class*='card']",
+                "a[href*='/anime/']", "a[href*='/series/']", "a[href*='/bolum/']"
+            )
+            
+            var home = emptyList<SearchResponse>()
+            
+            for (selector in selectors) {
+                val elements = document.select(selector)
+                Log.d("ANIZM", "Selector '$selector' found ${elements.size} elements")
+                
+                if (elements.isNotEmpty()) {
+                    home = elements.mapNotNull { it.toSearchResult() }
+                    if (home.isNotEmpty()) {
+                        Log.d("ANIZM", "Found ${home.size} items with selector: $selector")
+                        break
+                    }
+                }
+            }
+            
+            // Hiçbir şey bulamazsa, alternatif yöntem dene
+            if (home.isEmpty()) {
+                Log.d("ANIZM", "No items found with standard selectors, trying alternative method")
+                val allLinks = document.select("a[href]").filter { 
+                    val href = it.attr("href")
+                    href.contains("/anime/") || href.contains("/series/") || href.contains("/bolum/")
+                }
+                
+                home = allLinks.mapNotNull { link ->
+                    val title = link.text().trim().takeIf { it.isNotEmpty() } ?: 
+                               link.selectFirst("img")?.attr("alt")?.trim() ?: 
+                               link.selectFirst("img")?.attr("title")?.trim()
+                    
+                    if (title != null && title.isNotEmpty()) {
+                        val href = fixUrlNull(link.attr("href"))
+                        val posterUrl = fixUrlNull(link.selectFirst("img")?.attr("src")) ?: 
+                                       fixUrlNull(link.selectFirst("img")?.attr("data-src"))
+                        
+                        if (href != null) {
+                            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { 
+                                this.posterUrl = posterUrl 
+                            }
+                        } else null
+                    } else null
+                }.distinctBy { it.url }
+                
+                Log.d("ANIZM", "Alternative method found ${home.size} items")
+            }
 
             return newHomePageResponse(request.name, home)
         } catch (e: Exception) {
@@ -68,20 +129,81 @@ class AnizmNet : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("h2, h3, .title, .anime-title")?.text()?.trim() ?: return null
-        val href = fixUrlNull(this.selectFirst("a")?.attr("href")) ?: return null
-        val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("src")) ?: 
-                       fixUrlNull(this.selectFirst("img")?.attr("data-src"))
+        // Başlık bulma - daha geniş seçenekler
+        val title = this.selectFirst("h1, h2, h3, h4, .title, .anime-title, .name, .series-title")?.text()?.trim() ?:
+                   this.selectFirst("a")?.text()?.trim() ?:
+                   this.selectFirst("img")?.attr("alt")?.trim() ?:
+                   this.selectFirst("img")?.attr("title")?.trim() ?:
+                   this.text()?.trim()?.takeIf { it.isNotEmpty() && it.length < 100 } ?:
+                   return null
 
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
+        // Link bulma - daha esnek
+        var href = fixUrlNull(this.selectFirst("a")?.attr("href"))
+        if (href == null) {
+            // Eğer bu element'in kendisi bir link ise
+            href = if (this.tagName() == "a") fixUrlNull(this.attr("href")) else null
+        }
+        if (href == null) return null
+
+        // Poster bulma - daha kapsamlı
+        val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("src")) ?: 
+                       fixUrlNull(this.selectFirst("img")?.attr("data-src")) ?:
+                       fixUrlNull(this.selectFirst("img")?.attr("data-lazy")) ?:
+                       fixUrlNull(this.selectFirst("img")?.attr("data-original")) ?:
+                       fixUrlNull(this.selectFirst(".poster img, .image img, .thumbnail img")?.attr("src"))
+
+        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) { 
+            this.posterUrl = posterUrl 
+        }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
         try {
-            val document = app.get("${mainUrl}/arama?q=${query}", interceptor = interceptor).document
-            return document.select("div.anime-card, div.anime-item, article.anime, .anime-list-item").mapNotNull { it.toSearchResult() }
+            val searchUrl = "${mainUrl}/arama?q=${query}"
+            Log.d("ANIZM", "Searching: $searchUrl")
+            
+            val document = app.get(searchUrl, headers = headers, interceptor = interceptor).document
+            
+            // Arama sonuçları için selector'lar
+            val selectors = listOf(
+                "div.anime-card", "div.anime-item", "article.anime", ".anime-list-item",
+                ".search-result", ".result", ".anime", ".card", ".item", 
+                "div[class*='anime']", "div[class*='search']", "div[class*='result']",
+                "a[href*='/anime/']", "a[href*='/series/']"
+            )
+            
+            var results = emptyList<SearchResponse>()
+            
+            for (selector in selectors) {
+                val elements = document.select(selector)
+                Log.d("ANIZM", "Search selector '$selector' found ${elements.size} elements")
+                
+                if (elements.isNotEmpty()) {
+                    results = elements.mapNotNull { it.toSearchResult() }
+                    if (results.isNotEmpty()) {
+                        Log.d("ANIZM", "Search found ${results.size} results with selector: $selector")
+                        break
+                    }
+                }
+            }
+            
+            // Alternatif arama yöntemi
+            if (results.isEmpty()) {
+                Log.d("ANIZM", "No search results found with standard selectors, trying alternative method")
+                val allLinks = document.select("a[href]").filter { 
+                    val href = it.attr("href")
+                    val text = it.text().lowercase()
+                    (href.contains("/anime/") || href.contains("/series/")) && 
+                    (text.contains(query.lowercase()) || href.contains(query.lowercase()))
+                }
+                
+                results = allLinks.mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+                Log.d("ANIZM", "Alternative search method found ${results.size} results")
+            }
+            
+            return results
         } catch (e: Exception) {
             Log.d("ANIZM", "Error in search: ${e.message}")
             return emptyList()
@@ -90,7 +212,7 @@ class AnizmNet : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         try {
-            val document = app.get(url, interceptor = interceptor).document
+            val document = app.get(url, headers = headers, interceptor = interceptor).document
 
             val title = document.selectFirst("h1, .anime-title")?.text()?.trim() ?: return null
             val poster = fixUrlNull(document.selectFirst("img.poster, .anime-poster img")?.attr("src")) ?:
@@ -143,7 +265,7 @@ class AnizmNet : MainAPI() {
     ): Boolean {
         Log.d("ANIZM", "data » $data")
         try {
-            val document = app.get(data, interceptor = interceptor).document
+            val document = app.get(data, headers = headers, interceptor = interceptor).document
             var foundLinks = false
 
             // 1. Video player iframe'leri
