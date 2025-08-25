@@ -192,7 +192,7 @@ class SuperFilmGeldi : MainAPI() {
                                 source = "Direct Video",
                                 name = "Direct Video",
                                 url = videoSrc,
-                                type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                                type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                             ) {
                                 this.headers = mapOf("Referer" to "${mainUrl}/")
                                 this.quality = Qualities.Unknown.value
@@ -229,7 +229,7 @@ class SuperFilmGeldi : MainAPI() {
                                                 source = "Script Video",
                                                 name = "Script Video",
                                                 url = fullUrl,
-                                                type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                                                type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                             ) {
                                                 this.headers = mapOf("Referer" to "${mainUrl}/")
                                                 this.quality = Qualities.Unknown.value

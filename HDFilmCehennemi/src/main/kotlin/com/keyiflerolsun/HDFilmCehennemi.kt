@@ -15,6 +15,10 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.MainAPI
+import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
+import javax.crypto.spec.IvParameterSpec
+import java.security.MessageDigest
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
@@ -408,54 +412,90 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     // Rapidrame extractor
+    // DiziBox'un çalışan CryptoJS decrypt fonksiyonu
+    private fun decryptVideo(password: String, cipherText: String): String? {
+        return try {
+            val ctBytes = android.util.Base64.decode(cipherText.toByteArray(), android.util.Base64.DEFAULT)
+            val saltBytes = ctBytes.copyOfRange(8, 16)
+            val cipherTextBytes = ctBytes.copyOfRange(16, ctBytes.size)
+
+            val key = ByteArray(32) // 256 bit key
+            val iv = ByteArray(16)  // 128 bit IV
+            
+            // Simple key derivation (MD5 based like CryptoJS)
+            val passwordBytes = password.toByteArray()
+            val md = java.security.MessageDigest.getInstance("MD5")
+            var derived = ByteArray(0)
+            
+            while (derived.size < (key.size + iv.size)) {
+                md.update(derived)
+                md.update(passwordBytes)
+                md.update(saltBytes)
+                derived += md.digest()
+                md.reset()
+            }
+            
+            System.arraycopy(derived, 0, key, 0, key.size)
+            System.arraycopy(derived, key.size, iv, 0, iv.size)
+
+            val cipher = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+            val keySpec = javax.crypto.spec.SecretKeySpec(key, "AES")
+            cipher.init(javax.crypto.Cipher.DECRYPT_MODE, keySpec, javax.crypto.spec.IvParameterSpec(iv))
+
+            val plainText = cipher.doFinal(cipherTextBytes)
+            String(plainText)
+        } catch (e: Exception) {
+            Log.d("HDCH", "CryptoJS decrypt error: ${e.message}")
+            null
+        }
+    }
+
     private suspend fun extractRapidrame(url: String, source: String, callback: (ExtractorLink) -> Unit) {
         try {
             Log.d("HDCH", "Extracting Rapidrame: $url")
             
+            // DiziBox tarzı cookies kullan
             val doc = app.get(url, headers = headers, cookies = mapOf(
-                "HDCUser" to "true",
-                "isTrustedUser" to "true",
-                "bypass" to "1743289650198"
+                "LockUser" to "true",
+                "isTrustedUser" to "true", 
+                "dbxu" to "1743289650198"
             ), interceptor = interceptor).document
             
             // DiziBox tarzı CryptoJS decrypt kontrolü
             doc.select("script").forEach { scriptElement ->
                 val scriptContent = scriptElement.data()
                 
-                // DiziBox tarzı CryptoJS AES decrypt (tam implementasyon)
-                val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptContent)
-                if (cryptMatch != null) {
-                    try {
-                        val encryptedData = cryptMatch.groupValues[1]
-                        val key = cryptMatch.groupValues[2]
-                        Log.d("HDCH", "Found CryptoJS encrypted data for Rapidrame...")
-                        
-                        // DiziBox'dan esinlenen CryptoJS decrypt simulation
-                        // Gerçek CryptoJS decrypt yerine pattern-based URL extraction
-                        val mockDecrypt = "file: '$encryptedData', type: 'application/x-mpegURL'"
-                        val videoPattern = Regex("""file:\s*['"]([^'"]+\.(?:m3u8|mp4))['"']""")
-                        val videoMatch = videoPattern.find(mockDecrypt)
-                        
-                        if (videoMatch != null) {
-                            val videoUrl = videoMatch.groupValues[1]
-                            Log.d("HDCH", "Extracted Rapidrame video URL: $videoUrl")
+                            // DiziBox'un gerçek çalışan CryptoJS pattern'leri
+            val cryptData = Regex("""CryptoJS\.AES\.decrypt\("(.*)","""").find(scriptContent)?.groupValues?.get(1)
+            val cryptPass = Regex("""","(.*)"\);""").find(scriptContent)?.groupValues?.get(1)
+            
+            if (cryptData != null && cryptPass != null) {
+                try {
+                    Log.d("HDCH", "Found DiziBox-style CryptoJS encrypted data for Rapidrame...")
+                    val decryptedData = decryptVideo(cryptPass, cryptData)
+                    
+                    if (decryptedData != null) {
+                        val videoUrl = Regex("""file: ['"]([^'"]+)['"]""").find(decryptedData)?.groupValues?.get(1)
+                        if (videoUrl != null && videoUrl.startsWith("http")) {
+                            Log.d("HDCH", "Successfully decrypted Rapidrame video: $videoUrl")
                             callback.invoke(
                                 newExtractorLink(
                                     source = source,
-                                    name = "Rapidrame Decrypted",
+                                    name = "Rapidrame CryptoJS",
                                     url = videoUrl,
-                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    type = ExtractorLinkType.M3U8
                                 ) {
-                                    this.headers = headers + mapOf("Referer" to url, "Origin" to "https://rapidrame.com")
+                                    this.headers = headers + mapOf("Referer" to url)
                                     this.quality = Qualities.P1080.value
                                 }
                             )
                             return
                         }
-                    } catch (e: Exception) {
-                        Log.d("HDCH", "CryptoJS decrypt failed: ${e.message}")
                     }
+                } catch (e: Exception) {
+                    Log.d("HDCH", "DiziBox CryptoJS decrypt failed: ${e.message}")
                 }
+            }
                 
                 // Rapidrame packed script kontrolü  
                 if (scriptContent.contains("eval(function") && scriptContent.contains("rapidrame")) {
@@ -604,9 +644,9 @@ class HDFilmCehennemi : MainAPI() {
             Log.d("HDCH", "Extracting Closed: $url")
             
             val doc = app.get(url, headers = headers, cookies = mapOf(
-                "HDCUser" to "true",
+                "LockUser" to "true",
                 "isTrustedUser" to "true",
-                "bypass" to "1743289650198"
+                "dbxu" to "1743289650198"
             ), interceptor = interceptor).document
             
             // DiziBox tarzı multi-layer closed/closeload extraction
@@ -630,29 +670,35 @@ class HDFilmCehennemi : MainAPI() {
                 iframeDoc.select("script").forEach { iframeScript ->
                     val iframeScriptData = iframeScript.data()
                     
-                    // CryptoJS AES decrypt (DiziBox tarzı)
-                    val cryptData = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(iframeScriptData)
-                    if (cryptData != null) {
+                    // DiziBox'un gerçek çalışan CryptoJS pattern'leri
+                    val cryptData = Regex("""CryptoJS\.AES\.decrypt\("(.*)","""").find(iframeScriptData)?.groupValues?.get(1)
+                    val cryptPass = Regex("""","(.*)"\);""").find(iframeScriptData)?.groupValues?.get(1)
+                    
+                    if (cryptData != null && cryptPass != null) {
                         try {
-                            Log.d("HDCH", "Found CryptoJS in Closed iframe, attempting decode...")
-                            // DiziBox benzeri decode simulation
-                            val encData = cryptData.groupValues[1]
-                            if (encData.contains("http") && encData.contains(".m3u8")) {
-                                callback.invoke(
-                                    newExtractorLink(
-                                        source = source,
-                                        name = "Closed CryptoJS",
-                                        url = encData,
-                                        type = ExtractorLinkType.M3U8
-                                    ) {
-                                        this.headers = headers + mapOf("Referer" to playerIframe)
-                                        this.quality = Qualities.P1080.value
-                                    }
-                                )
-                                return
+                            Log.d("HDCH", "Found DiziBox-style CryptoJS in Closed iframe...")
+                            val decryptedData = decryptVideo(cryptPass, cryptData)
+                            
+                            if (decryptedData != null) {
+                                val videoUrl = Regex("""file: ['"]([^'"]+)['"]""").find(decryptedData)?.groupValues?.get(1)
+                                if (videoUrl != null && videoUrl.startsWith("http")) {
+                                    Log.d("HDCH", "Successfully decrypted Closed video: $videoUrl")
+                                    callback.invoke(
+                                        newExtractorLink(
+                                            source = source,
+                                            name = "Closed CryptoJS",
+                                            url = videoUrl,
+                                            type = ExtractorLinkType.M3U8
+                                        ) {
+                                            this.headers = headers + mapOf("Referer" to playerIframe)
+                                            this.quality = Qualities.P1080.value
+                                        }
+                                    )
+                                    return
+                                }
                             }
                         } catch (e: Exception) {
-                            Log.d("HDCH", "Closed CryptoJS failed: ${e.message}")
+                            Log.d("HDCH", "DiziBox Closed CryptoJS failed: ${e.message}")
                         }
                     }
                     
@@ -976,9 +1022,9 @@ override suspend fun loadLinks(
             data, 
             headers = headers,
             cookies = mapOf(
-                "HDCUser" to "true",
+                "LockUser" to "true",
                 "isTrustedUser" to "true",
-                "bypass" to "1743289650198"
+                "dbxu" to "1743289650198"
             ),
             interceptor = interceptor
         ).document

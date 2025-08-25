@@ -3,11 +3,13 @@
 package com.keyiflerolsun
 
 import android.util.Log
+import android.util.Base64
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import android.util.Base64
+import com.lagradost.cloudstream3.extractors.*
+import java.nio.charset.Charsets
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
 // import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 
@@ -200,58 +202,164 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
     
     try {
         val headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
+            "Referer" to mainUrl
         )
         val document = app.get(data, headers = headers).document
 
-    val iframeElement = document.selectFirst("iframe")
-    val iframe = fixUrlNull(iframeElement?.attr("src"))
-
-    if (iframe == null || iframe.contains("a-ads.com")) {
-        val buttons = document.select("button[onclick*='IndexIcerik']")
-
-        for (button in buttons) {
-            val onclickAttr = button.attr("onclick")
-            val subLink = onclickAttr.substringAfter("IndexIcerik('").substringBefore("'")
-                .takeIf { it.isNotBlank() }
-                ?.let { fixUrlNull(it) } ?: continue
-
-            Log.d("TRANM", "Extra seçici ile alınan link: $subLink")
-
-            val subResponse = app.get(subLink, headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"))
-            val subHtml = subResponse.body?.string().orEmpty()
-
-            val subDoc = org.jsoup.Jsoup.parse(subHtml, subLink)
-
-            // Önce artplayer-app içindeki data-url kontrol edilir
-            val dataUrl = subDoc.selectFirst("div.artplayer-app")?.attr("data-url")
-            if (dataUrl != null && dataUrl.endsWith(".m3u8")) {
-                Log.d("TRANM", "M3U8 data-url bulundu: $dataUrl")
-                callback(
-                    newExtractorLink(
-                        name = "TurkAnime",
-                        source = "TurkAnime",
-                        url = dataUrl,
-                        type = ExtractorLinkType.M3U8
-                        ) {
-                        this.quality = Qualities.Unknown.value
-                        this.headers = mapOf("Referer" to subLink)
-                        }
-                )
-                continue
+        // 1. DiziBox tarzı script analysis
+        document.select("script").forEach { script ->
+            val scriptData = script.data()
+            
+            // CryptoJS AES decrypt (DiziBox tarzı)
+            val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptData)
+            if (cryptMatch != null) {
+                try {
+                    val encryptedData = cryptMatch.groupValues[1]
+                    Log.d("TRANM", "Found CryptoJS encrypted data for TurkAnime...")
+                    
+                    if (encryptedData.contains("http") && encryptedData.contains(".m3u8")) {
+                        callback.invoke(
+                            newExtractorLink(
+                                source = "TurkAnime",
+                                name = "CryptoJS Decrypted",
+                                url = encryptedData,
+                                type = ExtractorLinkType.M3U8
+                            ) {
+                                this.headers = headers
+                                this.quality = Qualities.P1080.value
+                            }
+                        )
+                        foundLinks = true
+                        return@forEach
+                    }
+                } catch (e: Exception) {
+                    Log.d("TRANM", "CryptoJS decrypt failed: ${e.message}")
+                }
             }
-
-            // Eğer data-url yoksa iframe'e fallback yap
-            val subFrame = fixUrlNull(subDoc.selectFirst("iframe")?.attr("src")) ?: continue
-            Log.d("TRANM", "subFrame » $subFrame")
-
-            iframe2Load(subDoc, subFrame, subtitleCallback, callback)
+            
+            // Base64 + unescape (DiziBox tarzı)
+            val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptData)
+            if (atobMatch != null) {
+                try {
+                    val encodedData = atobMatch.groupValues[1]
+                    val decodedData = encodedData.decodeUri()
+                    val finalData = String(Base64.decode(decodedData, Base64.DEFAULT), Charsets.UTF_8)
+                    
+                    val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                    val videoMatch = videoPattern.find(finalData)
+                    if (videoMatch != null) {
+                        val videoUrl = videoMatch.groupValues[1]
+                        Log.d("TRANM", "Found TurkAnime Base64 decoded video: $videoUrl")
+                        callback.invoke(
+                            newExtractorLink(
+                                source = "TurkAnime",
+                                name = "Base64 Decoded",
+                                url = videoUrl,
+                                type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                            ) {
+                                this.headers = headers
+                                this.quality = Qualities.P720.value
+                            }
+                        )
+                        foundLinks = true
+                        return@forEach
+                    }
+                } catch (e: Exception) {
+                    Log.d("TRANM", "Base64 decode failed: ${e.message}")
+                }
+            }
         }
-    } else {
-        iframe2Load(document, iframe, subtitleCallback, callback)
-    }
 
-        foundLinks = true
+        // 2. Standard TurkAnime processing (enhanced)
+        val iframeElement = document.selectFirst("iframe")
+        val iframe = fixUrlNull(iframeElement?.attr("src"))
+
+        if (iframe == null || iframe.contains("a-ads.com")) {
+            val buttons = document.select("button[onclick*='IndexIcerik']")
+
+            for (button in buttons) {
+                val onclickAttr = button.attr("onclick")
+                val subLink = onclickAttr.substringAfter("IndexIcerik('").substringBefore("'")
+                    .takeIf { it.isNotBlank() }
+                    ?.let { fixUrlNull(it) } ?: continue
+
+                Log.d("TRANM", "Extra seçici ile alınan link: $subLink")
+
+                val subResponse = app.get(subLink, headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"))
+                val subHtml = subResponse.body?.string().orEmpty()
+
+                val subDoc = org.jsoup.Jsoup.parse(subHtml, subLink)
+
+                // DiziBox tarzı iframe script analysis
+                subDoc.select("script").forEach { subScript ->
+                    val subScriptData = subScript.data()
+                    
+                    // M3U8 pattern detection (enhanced)
+                    val m3u8Patterns = listOf(
+                        Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                        Regex("""source:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                        Regex("""url:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                        Regex("""src:\s*["']([^"']+\.m3u8[^"']*)["']""")
+                    )
+                    
+                    for (pattern in m3u8Patterns) {
+                        val match = pattern.find(subScriptData)
+                        if (match != null) {
+                            val videoUrl = match.groupValues[1]
+                            if (videoUrl.startsWith("http")) {
+                                Log.d("TRANM", "Found TurkAnime enhanced M3U8: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        name = "TurkAnime Enhanced",
+                                        source = "TurkAnime",
+                                        url = videoUrl,
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.quality = Qualities.P720.value
+                                        this.headers = mapOf("Referer" to subLink)
+                                    }
+                                )
+                                foundLinks = true
+                                return@forEach
+                            }
+                        }
+                    }
+                }
+
+                // Önce artplayer-app içindeki data-url kontrol edilir
+                val dataUrl = subDoc.selectFirst("div.artplayer-app")?.attr("data-url")
+                if (dataUrl != null && dataUrl.endsWith(".m3u8")) {
+                    Log.d("TRANM", "M3U8 data-url bulundu: $dataUrl")
+                    callback(
+                        newExtractorLink(
+                            name = "TurkAnime",
+                            source = "TurkAnime",
+                            url = dataUrl,
+                            type = ExtractorLinkType.M3U8
+                            ) {
+                            this.quality = Qualities.Unknown.value
+                            this.headers = mapOf("Referer" to subLink)
+                            }
+                    )
+                    foundLinks = true
+                    continue
+                }
+
+                // Eğer data-url yoksa iframe'e fallback yap
+                val subFrame = fixUrlNull(subDoc.selectFirst("iframe")?.attr("src")) ?: continue
+                Log.d("TRANM", "subFrame » $subFrame")
+
+                iframe2Load(subDoc, subFrame, subtitleCallback, callback)
+                foundLinks = true
+            }
+        } else {
+            iframe2Load(document, iframe, subtitleCallback, callback)
+            foundLinks = true
+        }
+
     } catch (e: Exception) {
         Log.e("TRANM", "Error in loadLinks: ${e.message}")
     }
