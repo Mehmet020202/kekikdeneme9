@@ -7,6 +7,8 @@ import android.util.Log
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 // import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
@@ -257,8 +259,8 @@ private fun Element.toSearchResult(): SearchResponse? {
                     if (atobMatch != null) {
                         try {
                             val encodedData = atobMatch.groupValues[1]
-                            val decodedData = encodedData.decodeUri()
-                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            val decodedData = URLDecoder.decode(encodedData, "UTF-8")
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), StandardCharsets.UTF_8)
                             
                             // Decode edilmiş data'da video URL ara
                             val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")

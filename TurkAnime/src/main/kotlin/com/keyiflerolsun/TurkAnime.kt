@@ -9,7 +9,7 @@ import org.jsoup.nodes.Document
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.extractors.*
-import java.nio.charset.Charsets
+import java.nio.charset.StandardCharsets
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
 // import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 
@@ -256,7 +256,7 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
                 try {
                     val encodedData = atobMatch.groupValues[1]
                     val decodedData = encodedData.decodeUri()
-                    val finalData = String(Base64.decode(decodedData, Base64.DEFAULT), Charsets.UTF_8)
+                    val finalData = String(Base64.decode(decodedData, Base64.DEFAULT), StandardCharsets.UTF_8)
                     
                     val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
                     val videoMatch = videoPattern.find(finalData)

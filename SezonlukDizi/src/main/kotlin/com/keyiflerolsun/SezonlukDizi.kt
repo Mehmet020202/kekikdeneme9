@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.extractors.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import java.nio.charset.Charsets
+import java.nio.charset.StandardCharsets
 
 class SezonlukDizi : MainAPI() {
     override var mainUrl              = "https://sezonlukdizi6.com"
@@ -173,7 +173,7 @@ class SezonlukDizi : MainAPI() {
                         try {
                             val encodedData = atobMatch.groupValues[1]
                             val decodedData = encodedData.decodeUri()
-                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), StandardCharsets.UTF_8)
                             
                             val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
                             val videoMatch = videoPattern.find(finalData)
@@ -311,7 +311,7 @@ class SezonlukDizi : MainAPI() {
                         try {
                             val encodedData = atobMatch.groupValues[1]
                             val decodedData = encodedData.decodeUri()
-                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), StandardCharsets.UTF_8)
                             
                             val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
                             val videoMatch = videoPattern.find(finalData)
