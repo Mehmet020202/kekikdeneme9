@@ -47,6 +47,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import org.jsoup.Jsoup
+import com.keyiflerolsun.UltimateVideoExtractor
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 
@@ -1213,7 +1214,17 @@ override suspend fun loadLinks(
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
-    Log.d("HDCH", "Loading links for: $data")
+    Log.d("HDCH", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+    
+    // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+    Log.d("HDCH", "Starting Ultimate Video Extraction...")
+    val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+    if (ultimateFound) {
+        Log.d("HDCH", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+        return true
+    }
+    
+    Log.d("HDCH", "Ultimate system completed, trying fallback methods...")
     try {
         val workingDomain = findWorkingDomain()
         val document = app.get(
