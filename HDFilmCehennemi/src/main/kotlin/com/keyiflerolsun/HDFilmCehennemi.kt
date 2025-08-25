@@ -44,6 +44,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 
 class HDFilmCehennemi : MainAPI() {
     override var mainUrl              = "https://www.hdfilmcehennemi.nl"
@@ -411,7 +412,62 @@ class HDFilmCehennemi : MainAPI() {
         try {
             Log.d("HDCH", "Extracting Rapidrame: $url")
             
-            val doc = app.get(url, headers = headers).document
+            val doc = app.get(url, headers = headers, cookies = mapOf(
+                "HDCUser" to "true",
+                "isTrustedUser" to "true",
+                "bypass" to "1743289650198"
+            ), interceptor = interceptor).document
+            
+            // DiziBox tarzı CryptoJS decrypt kontrolü
+            doc.select("script").forEach { scriptElement ->
+                val scriptContent = scriptElement.data()
+                
+                // CryptoJS AES decrypt kontrolü (DiziBox tarzı)
+                val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptContent)
+                if (cryptMatch != null) {
+                    try {
+                        val encryptedData = cryptMatch.groupValues[1]
+                        val key = cryptMatch.groupValues[2]
+                        Log.d("HDCH", "Found CryptoJS encrypted data, attempting decrypt...")
+                        // CryptoJS decrypt burada yapılacak - şimdilik decrypt etmeyi deneyelim
+                        return
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "CryptoJS decrypt failed: ${e.message}")
+                    }
+                }
+                
+                // Base64 + unescape kontrolü (DiziBox tarzı)
+                val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptContent)
+                if (atobMatch != null) {
+                    try {
+                        val encodedData = atobMatch.groupValues[1]
+                        val decodedData = encodedData.decodeUri()
+                        val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                        
+                        // Decode edilmiş data'da video URL ara
+                        val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                        val videoMatch = videoPattern.find(finalData)
+                        if (videoMatch != null) {
+                            val videoUrl = videoMatch.groupValues[1]
+                            Log.d("HDCH", "Found video URL after Base64 decode: $videoUrl")
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = source,
+                                    name = "Rapidrame Decoded",
+                                    url = videoUrl,
+                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                ) {
+                                    this.headers = headers + mapOf("Referer" to url)
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            return
+                        }
+                    } catch (e: Exception) {
+                        Log.d("HDCH", "Base64 decode failed: ${e.message}")
+                    }
+                }
+            }
             
             // Rapidrame video script'i ara
             val script = doc.select("script").find { 
@@ -492,7 +548,11 @@ class HDFilmCehennemi : MainAPI() {
         try {
             Log.d("HDCH", "Extracting Closed: $url")
             
-            val doc = app.get(url, headers = headers).document
+            val doc = app.get(url, headers = headers, cookies = mapOf(
+                "HDCUser" to "true",
+                "isTrustedUser" to "true",
+                "bypass" to "1743289650198"
+            ), interceptor = interceptor).document
             
             // Closed player script'i ara
             doc.select("script").forEach { script ->
@@ -567,7 +627,11 @@ class HDFilmCehennemi : MainAPI() {
         try {
             Log.d("HDCH", "Extracting Sibnet: $url")
             
-            val doc = app.get(url, headers = headers).document
+            val doc = app.get(url, headers = headers, cookies = mapOf(
+                "HDCUser" to "true",
+                "isTrustedUser" to "true",
+                "bypass" to "1743289650198"
+            ), interceptor = interceptor).document
             
             // Sibnet video URL'ini ara
             val videoElements = doc.select("video source, video")

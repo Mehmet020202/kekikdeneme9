@@ -225,9 +225,55 @@ private fun Element.toSearchResult(): SearchResponse? {
                     }
                 }
                 
-                // JavaScript video patterns
+                // DiziBox tarzı CryptoJS ve Base64 decode
                 document.select("script").forEach { script ->
                     val scriptText = script.data()
+                    
+                    // CryptoJS AES decrypt kontrolü
+                    val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptText)
+                    if (cryptMatch != null) {
+                        try {
+                            Log.d("FLMM", "Found CryptoJS encrypted data, attempting to extract...")
+                            // CryptoJS pattern bulundu, video URL'i aranacak
+                        } catch (e: Exception) {
+                            Log.d("FLMM", "CryptoJS decrypt failed: ${e.message}")
+                        }
+                    }
+                    
+                    // Base64 + unescape kontrolü
+                    val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptText)
+                    if (atobMatch != null) {
+                        try {
+                            val encodedData = atobMatch.groupValues[1]
+                            val decodedData = encodedData.decodeUri()
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            
+                            // Decode edilmiş data'da video URL ara
+                            val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                            val videoMatch = videoPattern.find(finalData)
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                Log.d("FLMM", "Found video URL after Base64 decode: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "Decoded Video",
+                                        name = "FilmMakinesi Decoded",
+                                        url = videoUrl,
+                                        type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    ) {
+                                        headers = mapOf("Referer" to "${mainUrl}/")
+                                        quality = Qualities.Unknown.value
+                                    }
+                                )
+                                foundLinks = true
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("FLMM", "Base64 decode failed: ${e.message}")
+                        }
+                    }
+                    
+                    // JavaScript video patterns
                     if (scriptText.contains("video") || scriptText.contains(".m3u8") || scriptText.contains(".mp4")) {
                         val patterns = listOf(
                             """["']([^"']*\.m3u8[^"']*)["']""",
