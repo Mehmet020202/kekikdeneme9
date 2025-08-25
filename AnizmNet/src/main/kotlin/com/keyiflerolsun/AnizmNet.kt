@@ -14,7 +14,7 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
-// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
+import com.keyiflerolsun.UltimateVideoExtractor
 import android.util.Base64
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 
@@ -278,7 +278,17 @@ class AnizmNet : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        Log.d("ANIZM", "data » $data")
+        Log.d("ANIZM", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+        
+        // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+        Log.d("ANIZM", "Starting Ultimate Video Extraction...")
+        val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+        if (ultimateFound) {
+            Log.d("ANIZM", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+            return true
+        }
+        
+        Log.d("ANIZM", "Ultimate system completed, trying fallback methods...")
         try {
             val document = app.get(data, headers = headers, interceptor = interceptor).document
             var foundLinks = false

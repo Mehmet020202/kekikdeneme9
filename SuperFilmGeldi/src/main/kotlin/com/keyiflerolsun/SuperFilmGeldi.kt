@@ -7,6 +7,7 @@ import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.keyiflerolsun.UltimateVideoExtractor
 
 class SuperFilmGeldi : MainAPI() {
     override var mainUrl              = "https://www.superfilmgeldi4.art"
@@ -109,7 +110,17 @@ class SuperFilmGeldi : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        Log.d("SFG", "data » $data")
+        Log.d("SFG", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+        
+        // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+        Log.d("SFG", "Starting Ultimate Video Extraction...")
+        val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+        if (ultimateFound) {
+            Log.d("SFG", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+            return true
+        }
+        
+        Log.d("SFG", "Ultimate system completed, trying fallback methods...")
         var foundLinks = false
         
         try {

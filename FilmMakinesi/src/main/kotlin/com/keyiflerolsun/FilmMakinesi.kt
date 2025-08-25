@@ -11,7 +11,7 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
+import com.keyiflerolsun.UltimateVideoExtractor
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -166,7 +166,17 @@ private fun Element.toSearchResult(): SearchResponse? {
 
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        Log.d("FLMM", "data » $data")
+        Log.d("FLMM", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+        
+        // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+        Log.d("FLMM", "Starting Ultimate Video Extraction...")
+        val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+        if (ultimateFound) {
+            Log.d("FLMM", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+            return true
+        }
+        
+        Log.d("FLMM", "Ultimate system completed, trying fallback methods...")
         var foundLinks = false
         
         try {

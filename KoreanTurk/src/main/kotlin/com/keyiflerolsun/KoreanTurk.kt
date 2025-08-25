@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.extractors.*
 import kotlin.random.Random
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import com.keyiflerolsun.UltimateVideoExtractor
 
 class KoreanTurk : MainAPI() {
     override var mainUrl              = "https://www.koreanturk.com"
@@ -155,7 +156,17 @@ class KoreanTurk : MainAPI() {
     )
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        Log.d("KRT", "data » $data")
+        Log.d("KRT", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+        
+        // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+        Log.d("KRT", "Starting Ultimate Video Extraction...")
+        val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+        if (ultimateFound) {
+            Log.d("KRT", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+            return true
+        }
+        
+        Log.d("KRT", "Ultimate system completed, trying fallback methods...")
         try {
             val document = app.get(data, headers = headers).document
             var foundLinks = false

@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.extractors.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import java.nio.charset.StandardCharsets
 import java.net.URLDecoder
+import com.keyiflerolsun.UltimateVideoExtractor
 
 class SezonlukDizi : MainAPI() {
     override var mainUrl              = "https://sezonlukdizi6.com"
@@ -105,7 +106,17 @@ class SezonlukDizi : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        Log.d("SZD", "data » $data")
+        Log.d("SZD", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+        
+        // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+        Log.d("SZD", "Starting Ultimate Video Extraction...")
+        val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+        if (ultimateFound) {
+            Log.d("SZD", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+            return true
+        }
+        
+        Log.d("SZD", "Ultimate system completed, trying fallback methods...")
         val document = app.get(data).document
         val aspData = getAspData()
         val bid      = document.selectFirst("div#dilsec")?.attr("data-id") ?: return false

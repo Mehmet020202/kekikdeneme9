@@ -12,7 +12,7 @@ import com.lagradost.cloudstream3.extractors.*
 import java.nio.charset.StandardCharsets
 import java.net.URLDecoder
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
-// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
+import com.keyiflerolsun.UltimateVideoExtractor
 
 class TurkAnime : MainAPI() {
     override var mainUrl              = "https://www.turkanime.co"
@@ -198,7 +198,17 @@ class TurkAnime : MainAPI() {
         }
     }
 override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-    Log.d("TRANM", "data » $data")
+    Log.d("TRANM", "🚀 ULTIMATE EXTRACTION STARTED for: $data")
+    
+    // 🆕 ULTIMATE VIDEO EXTRACTION SYSTEM - PHASE 1
+    Log.d("TRANM", "Starting Ultimate Video Extraction...")
+    val ultimateFound = UltimateVideoExtractor.extractFromUrl(data, mainUrl, callback)
+    if (ultimateFound) {
+        Log.d("TRANM", "✅ ULTIMATE SYSTEM FOUND VIDEOS!")
+        return true
+    }
+    
+    Log.d("TRANM", "Ultimate system completed, trying fallback methods...")
     var foundLinks = false
     
     try {
