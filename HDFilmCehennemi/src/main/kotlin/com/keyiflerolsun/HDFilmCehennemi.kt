@@ -95,27 +95,7 @@ class HDFilmCehennemi : MainAPI() {
         "https://www.hdfilmcehennemi.app"
     )
 
-    override var sequentialMainPage = true
-    override var sequentialMainPageDelay       = 150L
-    override var sequentialMainPageScrollDelay = 150L
-
-    // ! CloudFlare v2
-    private val cloudflareKiller by lazy { CloudflareKiller() }
-    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
-
-    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller): Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response {
-            val request  = chain.request()
-            val response = chain.proceed(request)
-            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
-
-            if (doc.html().contains("Just a moment") || doc.html().contains("Checking your browser")) {
-                return cloudflareKiller.intercept(chain)
-            }
-
-            return response
-        }
-    }
+    // Duplicate CloudFlare bypass settings removed - already defined above
 
     // Anti-bot headers
     private val headers = mapOf(
