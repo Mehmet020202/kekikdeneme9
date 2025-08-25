@@ -13,7 +13,6 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
 import com.keyiflerolsun.UniversalVideoExtractor
-import com.lagradost.cloudstream3.network.CloudflareKiller
 import android.util.Base64
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 

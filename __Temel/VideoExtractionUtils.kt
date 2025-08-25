@@ -147,7 +147,7 @@ object VideoExtractionUtils {
                         source = "Direct Video",
                         name = "Direct Video",
                         url = videoSrc,
-                        type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                        type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     ) {
                         headers = mapOf("Referer" to referer)
                         quality = Qualities.Unknown.value
@@ -205,7 +205,7 @@ object VideoExtractionUtils {
                                         source = "Script Video",
                                         name = "Script Video",
                                         url = fullUrl,
-                                        type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                                        type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                     ) {
                                         headers = mapOf("Referer" to referer)
                                         quality = Qualities.Unknown.value
@@ -252,7 +252,7 @@ object VideoExtractionUtils {
                             source = "Data Attribute",
                             name = "Data Video",
                             url = fullUrl,
-                            type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                            type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                         ) {
                             headers = mapOf("Referer" to referer)
                             quality = Qualities.Unknown.value
@@ -302,7 +302,7 @@ object VideoExtractionUtils {
                                 source = "AJAX Video",
                                 name = "AJAX Video",
                                 url = videoUrl,
-                                type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                                type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                             ) {
                                 headers = mapOf("Referer" to referer)
                                 quality = Qualities.Unknown.value
@@ -348,7 +348,7 @@ object VideoExtractionUtils {
                             source = "Meta Video",
                             name = "Meta Video",
                             url = videoUrl,
-                            type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                            type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                         ) {
                             headers = mapOf("Referer" to referer)
                             quality = Qualities.Unknown.value

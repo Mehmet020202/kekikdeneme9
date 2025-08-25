@@ -132,7 +132,7 @@ object UniversalVideoExtractor {
                         source = "Direct Video",
                         name = "Direct Video",
                         url = videoSrc,
-                        type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                        type = if (videoSrc.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     ) {
                         headers = commonHeaders + mapOf("Referer" to mainUrl)
                         quality = Qualities.Unknown.value
@@ -386,7 +386,7 @@ object UniversalVideoExtractor {
                 source = sourceName,
                 name = sourceName,
                 url = finalUrl,
-                type = if (finalUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                type = if (finalUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 headers = commonHeaders + mapOf("Referer" to mainUrl)
                 quality = Qualities.Unknown.value

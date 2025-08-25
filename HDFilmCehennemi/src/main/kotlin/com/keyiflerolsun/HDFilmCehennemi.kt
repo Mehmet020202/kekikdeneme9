@@ -34,7 +34,6 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
-import org.jsoup.Jsoup
 import android.util.Base64
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 import com.lagradost.cloudstream3.toRatingInt
