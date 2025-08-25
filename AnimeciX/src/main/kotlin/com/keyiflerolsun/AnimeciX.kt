@@ -150,8 +150,8 @@ override suspend fun loadLinks(
         // 1. Ana sayfa analizi ve iframe bulmaya çalış
         val response = app.get(pageUrl, referer = "$mainUrl/", headers = headers)
         val document = response.document
-        var iframeLink = response.url
-        Log.d("ACX", "iframeLink » $iframeLink")
+    var iframeLink = response.url
+    Log.d("ACX", "iframeLink » $iframeLink")
 
         // 2. Sayfa içindeki iframe'leri kontrol et
         document.select("iframe").forEach { iframe ->
@@ -168,12 +168,12 @@ override suspend fun loadLinks(
         }
 
         // 3. Eğer iframeLink içinde çift URL varsa düzelt
-        val doubleUrlRegex = Regex("https://animecix.tv/(https://animecix.tv/secure/[^\\s]+)")
-        val match = doubleUrlRegex.find(iframeLink)
-        if (match != null) {
-            iframeLink = match.groupValues[1]
-            Log.d("ACX", "Corrected iframeLink » $iframeLink")
-        }
+    val doubleUrlRegex = Regex("https://animecix.tv/(https://animecix.tv/secure/[^\\s]+)")
+    val match = doubleUrlRegex.find(iframeLink)
+    if (match != null) {
+        iframeLink = match.groupValues[1]
+        Log.d("ACX", "Corrected iframeLink » $iframeLink")
+    }
 
         // 4. Video element'leri kontrol et
         if (!foundLinks) {
@@ -198,17 +198,17 @@ override suspend fun loadLinks(
         }
 
         // 5. Eğer dizi (best-video) ise yönlendirmeyi takip et
-        if (iframeLink.contains("/secure/best-video")) {
+    if (iframeLink.contains("/secure/best-video")) {
             try {
                 val redirectResponse = app.get(iframeLink, referer = "$mainUrl/", headers = headers)
-                val redirectedUrl = redirectResponse.url
-                Log.d("ACX", "Redirected final URL » $redirectedUrl")
+        val redirectedUrl = redirectResponse.url
+        Log.d("ACX", "Redirected final URL » $redirectedUrl")
 
-                if (redirectedUrl.contains("tau-video")) {
-                    loadExtractor(redirectedUrl, "$mainUrl/", subtitleCallback, callback)
+        if (redirectedUrl.contains("tau-video")) {
+            loadExtractor(redirectedUrl, "$mainUrl/", subtitleCallback, callback)
                     foundLinks = true
-                } else {
-                    Log.d("ACX", "Redirect failed or unexpected URL: $redirectedUrl")
+        } else {
+            Log.d("ACX", "Redirect failed or unexpected URL: $redirectedUrl")
                     // Yine de ekstraktörü dene
                     loadExtractor(redirectedUrl, "$mainUrl/", subtitleCallback, callback)
                     foundLinks = true

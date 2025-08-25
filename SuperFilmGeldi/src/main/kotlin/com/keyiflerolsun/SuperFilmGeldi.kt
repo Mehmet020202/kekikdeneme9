@@ -128,24 +128,24 @@ class SuperFilmGeldi : MainAPI() {
                     val mixPoint = Regex("""videoUrl":"(.*)","videoServer""").find(iSource)?.groupValues?.get(1)?.replace("\\", "")
 
                     if (mixPoint != null) {
-                        var endPoint = "?s=0&d="
+            var endPoint = "?s=0&d="
 
-                        if (iframe.contains("mixlion")) {
-                            endPoint = "?s=3&d="
-                        } else if (iframe.contains("mixeagle")) {
-                            endPoint = "?s=1&d="
-                        }
+            if (iframe.contains("mixlion")) {
+                endPoint = "?s=3&d="
+            } else if (iframe.contains("mixeagle")) {
+                endPoint = "?s=1&d="
+            }
 
-                        val m3uLink = iframe.substringBefore("/player") + mixPoint + endPoint
-                        Log.d("SFG", "m3uLink » $m3uLink")
+            val m3uLink = iframe.substringBefore("/player") + mixPoint + endPoint
+            Log.d("SFG", "m3uLink » $m3uLink")
 
-                        callback.invoke(
-                            newExtractorLink(
-                                source  = this.name,
-                                name    = this.name,
-                                url     = m3uLink,
-                                type = ExtractorLinkType.M3U8
-                            ) {
+            callback.invoke(
+                newExtractorLink(
+                    source  = this.name,
+                    name    = this.name,
+                    url     = m3uLink,
+				type = ExtractorLinkType.M3U8
+            ) {
                                 this.quality = Qualities.Unknown.value
                                 this.headers = mapOf("Referer" to iframe)
                             }
