@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.keyiflerolsun.UniversalVideoExtractor
+// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -286,8 +286,8 @@ private fun Element.toSearchResult(): SearchResponse? {
             Log.e("FLMM", "Error in loadLinks: ${e.message}")
         }
         
-        // Son çare: Evrensel video extractor
-        if (!foundLinks) {
+        // Son çare: Evrensel video extractor (temporarily disabled for build compatibility)
+        /* if (!foundLinks) {
             Log.d("FLMM", "Trying UniversalVideoExtractor as last resort...")
             foundLinks = UniversalVideoExtractor.extractVideo(
                 url = data,
@@ -296,7 +296,7 @@ private fun Element.toSearchResult(): SearchResponse? {
                 subtitleCallback = subtitleCallback,
                 callback = callback
             )
-        }
+        } */
         
         Log.d("FLMM", "FilmMakinesi extraction completed. Found links: $foundLinks")
         return foundLinks

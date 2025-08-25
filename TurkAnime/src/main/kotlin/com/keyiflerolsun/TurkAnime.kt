@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import android.util.Base64
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
-import com.keyiflerolsun.UniversalVideoExtractor
+// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 
 class TurkAnime : MainAPI() {
     override var mainUrl              = "https://www.turkanime.co"
@@ -256,8 +256,8 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
         Log.e("TRANM", "Error in loadLinks: ${e.message}")
     }
     
-    // Son çare: Evrensel video extractor
-    if (!foundLinks) {
+    // Son çare: Evrensel video extractor (temporarily disabled for build compatibility)
+    /* if (!foundLinks) {
         Log.d("TRANM", "Trying UniversalVideoExtractor as last resort...")
         foundLinks = UniversalVideoExtractor.extractVideo(
             url = data,
@@ -266,7 +266,7 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
             subtitleCallback = subtitleCallback,
             callback = callback
         )
-    }
+    } */
     
     Log.d("TRANM", "TurkAnime extraction completed. Found links: $foundLinks")
     return foundLinks

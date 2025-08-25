@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.keyiflerolsun.UniversalVideoExtractor
+// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -365,8 +365,8 @@ class FullHDFilm : MainAPI() {
             Log.e("FHDF", "Error in loadLinks: ${e.message}")
         }
 
-        // Son çare: Evrensel video extractor
-        if (!foundLinks) {
+        // Son çare: Evrensel video extractor (temporarily disabled for build compatibility)
+        /* if (!foundLinks) {
             Log.d("FHDF", "Trying UniversalVideoExtractor as last resort...")
             foundLinks = UniversalVideoExtractor.extractVideo(
                 url = data,
@@ -375,7 +375,7 @@ class FullHDFilm : MainAPI() {
                 subtitleCallback = subtitleCallback,
                 callback = callback
             )
-        }
+        } */
         
         Log.d("FHDF", "FullHDFilm extraction completed. Found links: $foundLinks")
         return foundLinks

@@ -12,7 +12,7 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
-import com.keyiflerolsun.UniversalVideoExtractor
+// import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 import android.util.Base64
 import com.lagradost.cloudstream3.utils.StringUtils.decodeUri
 
@@ -54,24 +54,6 @@ class AnizmNet : MainAPI() {
         "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
         "Referer" to mainUrl
     )
-
-    // ! CloudFlare v2
-    private val cloudflareKiller by lazy { CloudflareKiller() }
-    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
-
-    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller): Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response {
-            val request  = chain.request()
-            val response = chain.proceed(request)
-            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
-
-            if (doc.html().contains("Just a moment") || doc.html().contains("Checking your browser")) {
-                return cloudflareKiller.intercept(chain)
-            }
-
-            return response
-        }
-    }
 
     override val mainPage = mainPageOf(
         "${mainUrl}/son-eklenen" to "🔥 EN SON ANİMELER",
@@ -554,8 +536,8 @@ class AnizmNet : MainAPI() {
                 }
             }
 
-            // Son çare: Evrensel video extractor
-            if (!foundLinks) {
+            // Son çare: Evrensel video extractor (temporarily disabled for build compatibility)
+            /* if (!foundLinks) {
                 Log.d("ANIZM", "Trying UniversalVideoExtractor as last resort...")
                 foundLinks = UniversalVideoExtractor.extractVideo(
                     url = data,
@@ -564,7 +546,7 @@ class AnizmNet : MainAPI() {
                     subtitleCallback = subtitleCallback,
                     callback = callback
                 )
-            }
+            } */
             
             return foundLinks
         } catch (e: Exception) {
