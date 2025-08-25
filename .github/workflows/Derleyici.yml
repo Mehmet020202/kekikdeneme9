@@ -78,6 +78,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Build $GITHUB_SHA - $(date)"
+            git remote remove origin || true
             git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
             git push origin HEAD:builds --force
           fi
