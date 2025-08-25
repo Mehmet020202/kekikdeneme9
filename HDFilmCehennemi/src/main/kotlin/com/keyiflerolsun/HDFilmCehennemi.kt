@@ -98,13 +98,38 @@ class HDFilmCehennemi : MainAPI() {
 
     // Duplicate CloudFlare bypass settings removed - already defined above
 
-    // Anti-bot headers
-    private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3",
-        "Referer" to mainUrl
+    // IDM tarzı dynamic headers ve User-Agent rotation
+    private val userAgents = listOf(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36"
     )
+    
+    private fun getRandomUserAgent() = userAgents.random()
+    
+    private fun getIDMStyleHeaders(referer: String? = null): Map<String, String> = mapOf(
+        "User-Agent" to getRandomUserAgent(),
+        "Accept" to "*/*",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding" to "gzip, deflate, br",
+        "Connection" to "keep-alive",
+        "Upgrade-Insecure-Requests" to "1",
+        "Sec-Fetch-Dest" to "document",
+        "Sec-Fetch-Mode" to "navigate",
+        "Sec-Fetch-Site" to "none",
+        "Sec-CH-UA" to "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+        "Sec-CH-UA-Mobile" to "?0",
+        "Sec-CH-UA-Platform" to "\"Windows\"",
+        "DNT" to "1",
+        "Cache-Control" to "no-cache",
+        "Pragma" to "no-cache"
+    ).let { baseHeaders ->
+        if (referer != null) baseHeaders + ("Referer" to referer) else baseHeaders
+    }
+    
+    private val headers = getIDMStyleHeaders(mainUrl)
 
     // Domain'i test et ve çalışan domain'i bul
     private suspend fun findWorkingDomain(): String {
@@ -318,11 +343,108 @@ class HDFilmCehennemi : MainAPI() {
              return hdchLink
         }
 
+    // DiziBox tarzı tam iframe decode fonksiyonu
+    private suspend fun iframeDecode(data: String, iframe: String, source: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        var processedIframe = iframe
+        
+        try {
+            // King player özel işlemi (DiziBox exact method)
+            if (processedIframe.contains("/player/king/king.php") || processedIframe.contains("king.php")) {
+                processedIframe = processedIframe.replace("king.php?v=", "king.php?wmode=opaque&v=")
+                
+                val subDoc = app.get(
+                    processedIframe,
+                    referer = data,
+                    headers = headers,
+                    cookies = mapOf(
+                        "LockUser" to "true",
+                        "isTrustedUser" to "true",
+                        "dbxu" to "1743289650198"
+                    ),
+                    interceptor = interceptor
+                ).document
+                
+                val subFrame = subDoc.selectFirst("div#Player iframe")?.attr("src") ?: return false
+                Log.d("HDCH", "King player subFrame: $subFrame")
+                
+                val iDoc = app.get(subFrame, referer = "${mainUrl}/", headers = headers).text
+                val cryptData = Regex("""CryptoJS\.AES\.decrypt\("(.*)","""").find(iDoc)?.groupValues?.get(1) ?: return false
+                val cryptPass = Regex("""","(.*)"\);""").find(iDoc)?.groupValues?.get(1) ?: return false
+                
+                val decryptedData = decryptVideo(cryptPass, cryptData)
+                if (decryptedData != null) {
+                    val vidUrl = Regex("""file: ['"]([^'"]+)['"]""").find(decryptedData)?.groupValues?.get(1) ?: return false
+                    Log.d("HDCH", "King player decrypted video: $vidUrl")
+                    
+                    callback.invoke(
+                        newExtractorLink(
+                            source = source,
+                            name = "King Player",
+                            url = vidUrl,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.headers = headers + mapOf("Referer" to vidUrl)
+                            this.quality = Qualities.P1080.value
+                        }
+                    )
+                    return true
+                }
+            }
+            
+            // Moly/Haydi player için unescape + Base64 decode (DiziBox exact method)
+            else if (processedIframe.contains("/player/moly/") || processedIframe.contains("/player/haydi") || 
+                     processedIframe.contains("moly.php") || processedIframe.contains("haydi.php")) {
+                
+                var subDoc = app.get(
+                    processedIframe,
+                    referer = data,
+                    headers = headers,
+                    cookies = mapOf(
+                        "LockUser" to "true",
+                        "isTrustedUser" to "true",
+                        "dbxu" to "1743289650198"
+                    ),
+                    interceptor = interceptor
+                ).document
+                
+                // DiziBox tarzı unescape + Base64 decode
+                val atobData = Regex("""unescape\("(.*)"\)""").find(subDoc.html())?.groupValues?.get(1)
+                if (atobData != null) {
+                    val decodedAtob = atobData.decodeUri()
+                    val strAtob = String(android.util.Base64.decode(decodedAtob, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                    subDoc = org.jsoup.Jsoup.parse(strAtob)
+                }
+                
+                val subFrame = subDoc.selectFirst("div#Player iframe")?.attr("src") ?: return false
+                Log.d("HDCH", "Moly/Haydi player subFrame: $subFrame")
+                
+                loadExtractor(subFrame, "${mainUrl}/", subtitleCallback, callback)
+                return true
+            }
+            
+            // Standard player processing
+            else {
+                loadExtractor(processedIframe, "${mainUrl}/", subtitleCallback, callback)
+                return true
+            }
+            
+        } catch (e: Exception) {
+            Log.d("HDCH", "Error in iframeDecode: ${e.message}")
+        }
+        
+        return false
+    }
+
     private suspend fun invokeLocalSource(source: String, url: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
         try {
             Log.d("HDCH", "Processing player URL: $url")
             
-            // URL tipine göre özel işlem
+            // DiziBox tarzı iframe decode kullan
+            if (iframeDecode(url, url, source, subtitleCallback, callback)) {
+                return
+            }
+            
+            // URL tipine göre özel işlem (fallback)
             when {
                 url.contains("rapidrame") -> {
                     extractRapidrame(url, source, callback)
@@ -450,14 +572,90 @@ class HDFilmCehennemi : MainAPI() {
         }
     }
 
+        // IDM tarzı deep network analysis
+    private suspend fun idmStyleNetworkAnalysis(url: String, referer: String): List<String> {
+        val potentialLinks = mutableListOf<String>()
+        
+        try {
+            // IDM tarzı multiple request attempt
+            val headers1 = getIDMStyleHeaders(referer)
+            val headers2 = getIDMStyleHeaders(referer).toMutableMap().apply {
+                put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                put("Sec-Fetch-Dest", "iframe")
+                put("Sec-Fetch-Mode", "navigate")
+                put("Sec-Fetch-Site", "cross-site")
+            }
+            val headers3 = getIDMStyleHeaders(referer).toMutableMap().apply {
+                put("Accept", "application/json, text/plain, */*")
+                put("X-Requested-With", "XMLHttpRequest")
+            }
+            
+            // Multiple parallel requests (IDM technique)
+            val responses = listOf(
+                kotlin.runCatching { app.get(url, headers = headers1) },
+                kotlin.runCatching { app.get(url, headers = headers2) },
+                kotlin.runCatching { app.get(url, headers = headers3) }
+            )
+            
+            responses.forEach { result ->
+                result.getOrNull()?.let { response ->
+                    val content = response.text
+                    
+                    // IDM tarzı aggressive URL extraction
+                    val urlPatterns = listOf(
+                        Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*"""),
+                        Regex("""https?://[^\s"'<>]+\.mp4[^\s"'<>]*"""),
+                        Regex("""https?://[^\s"'<>]+\.avi[^\s"'<>]*"""),
+                        Regex("""https?://[^\s"'<>]+\.mkv[^\s"'<>]*"""),
+                        Regex(""""(https?://[^"]+\.(m3u8|mp4|avi|mkv)[^"]*)""""),
+                        Regex("""'(https?://[^']+\.(m3u8|mp4|avi|mkv)[^']*)'"""),
+                        Regex("""src[=:]\s*["']([^"']+\.(m3u8|mp4))[^"']*["']"""),
+                        Regex("""file[=:]\s*["']([^"']+\.(m3u8|mp4))[^"']*["']"""),
+                        Regex("""url[=:]\s*["']([^"']+\.(m3u8|mp4))[^"']*["']""")
+                    )
+                    
+                    urlPatterns.forEach { pattern ->
+                        pattern.findAll(content).forEach { match ->
+                            val foundUrl = if (match.groupValues.size > 1) match.groupValues[1] else match.value
+                            if (foundUrl.isNotEmpty() && foundUrl.startsWith("http")) {
+                                potentialLinks.add(foundUrl)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("HDCH", "IDM network analysis error: ${e.message}")
+        }
+        
+        return potentialLinks.distinct()
+    }
+
     private suspend fun extractRapidrame(url: String, source: String, callback: (ExtractorLink) -> Unit) {
         try {
             Log.d("HDCH", "Extracting Rapidrame: $url")
             
-            // DiziBox tarzı cookies kullan
-            val doc = app.get(url, headers = headers, cookies = mapOf(
+            // IDM tarzı network analysis
+            val networkLinks = idmStyleNetworkAnalysis(url, url)
+            networkLinks.forEach { link ->
+                Log.d("HDCH", "IDM found direct link: $link")
+                callback.invoke(
+                    newExtractorLink(
+                        source = source,
+                        name = "IDM Network Analysis",
+                        url = link,
+                        type = if (link.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) {
+                        this.headers = getIDMStyleHeaders(url)
+                        this.quality = if (link.contains("1080")) Qualities.P1080.value else Qualities.P720.value
+                    }
+                )
+            }
+            
+            // Original DiziBox method as fallback
+            val doc = app.get(url, headers = getIDMStyleHeaders(url), cookies = mapOf(
                 "LockUser" to "true",
-                "isTrustedUser" to "true", 
+                "isTrustedUser" to "true",
                 "dbxu" to "1743289650198"
             ), interceptor = interceptor).document
             
