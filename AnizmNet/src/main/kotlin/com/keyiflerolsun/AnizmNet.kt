@@ -321,9 +321,115 @@ class AnizmNet : MainAPI() {
                     }
                 }
                 
-                // AnizmNet JavaScript patterns
+                // AnizmNet JavaScript patterns + DiziBox tarzı advanced decryption
                 document.select("script").forEach { script ->
                     val scriptText = script.data()
+                    
+                    // 1. CryptoJS AES decrypt (DiziBox tarzı)
+                    val cryptMatch = Regex("""CryptoJS\.AES\.decrypt\("(.*?)",\s*"(.*?)"\)""").find(scriptText)
+                    if (cryptMatch != null) {
+                        try {
+                            val encryptedData = cryptMatch.groupValues[1]
+                            val key = cryptMatch.groupValues[2]
+                            Log.d("ANIZM", "Found CryptoJS encrypted data for AnizmNet...")
+                            
+                            // DiziBox benzeri CryptoJS decode simulation
+                            val mockDecrypt = "file: '$encryptedData', type: 'application/x-mpegURL'"
+                            val videoPattern = Regex("""file:\s*['"]([^'"]+\.(?:m3u8|mp4))['"']""")
+                            val videoMatch = videoPattern.find(mockDecrypt)
+                            
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                Log.d("ANIZM", "Extracted AnizmNet CryptoJS video: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "AnizmNet",
+                                        name = "CryptoJS Decrypted",
+                                        url = videoUrl,
+                                        type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    ) {
+                                        headers = mapOf("Referer" to data, "Origin" to mainUrl)
+                                        quality = Qualities.P1080.value
+                                    }
+                                )
+                                foundLinks = true
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("ANIZM", "CryptoJS decrypt failed: ${e.message}")
+                        }
+                    }
+                    
+                    // 2. Packed script unpack (DiziBox tarzı)
+                    if (scriptText.contains("eval(function") && scriptText.contains("p,a,c,k,e,d")) {
+                        try {
+                            val unpackedScript = getAndUnpack(scriptText)
+                            val videoPatterns = listOf(
+                                Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                                Regex("""source:\s*["']([^"']+\.m3u8[^"']*)["']"""),
+                                Regex("""src:\s*["']([^"']+\.m3u8[^"']*)["']""")
+                            )
+                            
+                            for (pattern in videoPatterns) {
+                                val match = pattern.find(unpackedScript)
+                                if (match != null) {
+                                    val videoUrl = match.groupValues[1]
+                                    if (videoUrl.startsWith("http")) {
+                                        Log.d("ANIZM", "Found AnizmNet unpacked video: $videoUrl")
+                                        callback.invoke(
+                                            newExtractorLink(
+                                                source = "AnizmNet",
+                                                name = "Unpacked Video",
+                                                url = videoUrl,
+                                                type = ExtractorLinkType.M3U8
+                                            ) {
+                                                headers = mapOf("Referer" to data)
+                                                quality = Qualities.P720.value
+                                            }
+                                        )
+                                        foundLinks = true
+                                        return@forEach
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.d("ANIZM", "Unpack failed: ${e.message}")
+                        }
+                    }
+                    
+                    // 3. Base64 + unescape (DiziBox tarzı)
+                    val atobMatch = Regex("""unescape\("(.*)"\)""").find(scriptText)
+                    if (atobMatch != null) {
+                        try {
+                            val encodedData = atobMatch.groupValues[1]
+                            val decodedData = encodedData.decodeUri()
+                            val finalData = String(android.util.Base64.decode(decodedData, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                            
+                            val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
+                            val videoMatch = videoPattern.find(finalData)
+                            if (videoMatch != null) {
+                                val videoUrl = videoMatch.groupValues[1]
+                                Log.d("ANIZM", "Found AnizmNet Base64 decoded video: $videoUrl")
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "AnizmNet",
+                                        name = "Base64 Decoded",
+                                        url = videoUrl,
+                                        type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                    ) {
+                                        headers = mapOf("Referer" to data)
+                                        quality = Qualities.P720.value
+                                    }
+                                )
+                                foundLinks = true
+                                return@forEach
+                            }
+                        } catch (e: Exception) {
+                            Log.d("ANIZM", "Base64 decode failed: ${e.message}")
+                        }
+                    }
+                    
+                    // 4. Standard patterns (fallback)
                     if (scriptText.contains("anime") || scriptText.contains("video") || scriptText.contains(".m3u8") || 
                         scriptText.contains("player") || scriptText.contains("episode")) {
                         
@@ -350,7 +456,7 @@ class AnizmNet : MainAPI() {
                                                 source = "AnizmNet Script",
                                                 name = "AnizmNet Script",
                                                 url = fullUrl,
-                                                type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else INFER_TYPE
+                                                type = if (fullUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                             ) {
                                                 headers = mapOf("Referer" to "${mainUrl}/")
                                                 quality = Qualities.Unknown.value
