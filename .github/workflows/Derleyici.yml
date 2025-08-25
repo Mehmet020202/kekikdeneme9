@@ -78,5 +78,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Build $GITHUB_SHA - $(date)"
-            git push -u origin builds
+            git push --set-upstream origin builds
           fi
