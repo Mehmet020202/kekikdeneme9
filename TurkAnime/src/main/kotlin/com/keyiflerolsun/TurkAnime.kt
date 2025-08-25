@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.extractors.*
 import java.nio.charset.StandardCharsets
+import java.net.URLDecoder
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
 // import com.keyiflerolsun.UniversalVideoExtractor // Temporarily disabled for build compatibility
 
@@ -255,7 +256,7 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
             if (atobMatch != null) {
                 try {
                     val encodedData = atobMatch.groupValues[1]
-                    val decodedData = encodedData.decodeUri()
+                    val decodedData = URLDecoder.decode(encodedData, "UTF-8")
                     val finalData = String(Base64.decode(decodedData, Base64.DEFAULT), StandardCharsets.UTF_8)
                     
                     val videoPattern = Regex("""file:\s*["']([^"']+\.(?:m3u8|mp4))["']""")
