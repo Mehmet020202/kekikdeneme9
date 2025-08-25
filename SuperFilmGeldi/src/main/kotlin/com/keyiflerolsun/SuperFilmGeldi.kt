@@ -102,7 +102,7 @@ class SuperFilmGeldi : MainAPI() {
             this.year            = year
             this.plot            = description
             this.tags            = tags
-            this.rating          = rating
+            // this.rating = rating // Deprecated, removed for compatibility
             this.recommendations = recommendations
             addActors(actors)
         }

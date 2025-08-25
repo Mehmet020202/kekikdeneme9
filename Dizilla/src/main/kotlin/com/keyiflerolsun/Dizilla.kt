@@ -275,7 +275,7 @@ class Dizilla : MainAPI() {
             this.year = year
             this.plot = description
             this.tags = tags
-            this.rating = rating
+            // this.rating = rating
             addActors(actors)
         }
     }

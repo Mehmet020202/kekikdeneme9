@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
+import com.keyiflerolsun.UniversalVideoExtractor
 
 
 class FilmMakinesi : MainAPI() {
@@ -130,7 +131,7 @@ private fun Element.toSearchResult(): SearchResponse? {
             this.year            = year
             this.plot            = description
             this.tags            = tags
-            this.rating          = rating
+            // this.rating = rating // Deprecated, removed for compatibility
             this.duration        = duration
             this.recommendations = recommendations
             addActors(actors)

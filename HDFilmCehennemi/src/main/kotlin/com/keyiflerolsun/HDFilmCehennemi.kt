@@ -246,7 +246,7 @@ class HDFilmCehennemi : MainAPI() {
                     this.year            = year
                     this.plot            = description
                     this.tags            = tags
-                    this.rating         = score
+                    // this.rating = score // Deprecated, removed for compatibility
                     this.recommendations = recommendations
                     addActors(actors)
                     addTrailer(trailer)
@@ -259,7 +259,7 @@ class HDFilmCehennemi : MainAPI() {
                     this.year            = year
                     this.plot            = description
                     this.tags            = tags
-                    this.rating         = score
+                    // this.rating = score // Deprecated, removed for compatibility
                     this.recommendations = recommendations
                     addActors(actors)
                     addTrailer(trailer)

@@ -126,7 +126,7 @@ class AsyaAnimeleri : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.rating = score
+                // this.rating = score
                 this.recommendations = recommendations
             }
         } catch (e: Exception) {

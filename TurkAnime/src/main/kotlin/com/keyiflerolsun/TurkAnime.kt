@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import android.util.Base64
 import com.lagradost.cloudstream3.extractors.helper.AesHelper
+import com.keyiflerolsun.UniversalVideoExtractor
 
 class TurkAnime : MainAPI() {
     override var mainUrl              = "https://www.turkanime.co"
@@ -129,7 +130,7 @@ class TurkAnime : MainAPI() {
             this.plot      = description
             this.year      = year
             this.tags      = tags
-            this.rating    = rating
+            // this.rating = rating // Deprecated, removed for compatibility
         }
     }
 

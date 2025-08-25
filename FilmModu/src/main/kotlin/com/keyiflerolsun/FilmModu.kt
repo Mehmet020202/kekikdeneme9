@@ -93,7 +93,7 @@ class FilmModu : MainAPI() {
             this.plot      = description
             this.year      = year
             this.tags      = tags
-            this.rating    = rating
+            // this.rating    = rating
             addActors(actors)
             addTrailer(trailer)
         }

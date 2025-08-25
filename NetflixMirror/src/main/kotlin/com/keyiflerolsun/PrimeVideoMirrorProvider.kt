@@ -157,7 +157,7 @@ class PrimeVideoMirrorProvider : MainAPI() {
             year = data.year.toIntOrNull()
             tags = genre
             actors = cast
-            this.rating = rating
+            // this.rating = rating
             this.duration = runTime
         }
     }

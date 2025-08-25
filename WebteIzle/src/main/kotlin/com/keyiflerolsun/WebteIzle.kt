@@ -142,7 +142,7 @@ class WebteIzle : MainAPI() {
             this.year = year
             this.plot = description
             this.tags = tags
-            this.rating = rating
+            // this.rating = rating
             this.duration = duration
             addTrailer("https://www.youtube.com/embed/${trailer}")
             addActors(actors)

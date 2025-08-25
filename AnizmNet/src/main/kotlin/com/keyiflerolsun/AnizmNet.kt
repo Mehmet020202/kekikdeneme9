@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
+import com.keyiflerolsun.UniversalVideoExtractor
 
 class AnizmNet : MainAPI() {
     override var mainUrl              = "https://anizm.net"
@@ -248,7 +249,7 @@ class AnizmNet : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.rating = score
+                // this.rating = score // Deprecated, removed for compatibility
                 this.recommendations = recommendations
             }
         } catch (e: Exception) {

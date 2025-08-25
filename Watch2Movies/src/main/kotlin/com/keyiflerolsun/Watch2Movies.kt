@@ -103,7 +103,7 @@ class Watch2Movies : MainAPI() {
             this.plot            = description
             this.year            = year
             this.tags            = tags
-            this.rating          = rating
+            // this.rating          = rating
             this.duration        = duration
             this.recommendations = recommendations
             addActors(actors)
