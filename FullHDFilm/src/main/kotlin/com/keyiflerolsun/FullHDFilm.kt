@@ -364,6 +364,18 @@ class FullHDFilm : MainAPI() {
             Log.e("FHDF", "Error in loadLinks: ${e.message}")
         }
 
+        // Son çare: Evrensel video extractor
+        if (!foundLinks) {
+            Log.d("FHDF", "Trying UniversalVideoExtractor as last resort...")
+            foundLinks = UniversalVideoExtractor.extractVideo(
+                url = data,
+                mainUrl = mainUrl,
+                logTag = "FHDF",
+                subtitleCallback = subtitleCallback,
+                callback = callback
+            )
+        }
+        
         Log.d("FHDF", "FullHDFilm extraction completed. Found links: $foundLinks")
         return foundLinks
     }

@@ -533,6 +533,18 @@ class AnizmNet : MainAPI() {
                 }
             }
 
+            // Son çare: Evrensel video extractor
+            if (!foundLinks) {
+                Log.d("ANIZM", "Trying UniversalVideoExtractor as last resort...")
+                foundLinks = UniversalVideoExtractor.extractVideo(
+                    url = data,
+                    mainUrl = mainUrl,
+                    logTag = "ANIZM",
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+            }
+            
             return foundLinks
         } catch (e: Exception) {
             Log.d("ANIZM", "Error in loadLinks: ${e.message}")

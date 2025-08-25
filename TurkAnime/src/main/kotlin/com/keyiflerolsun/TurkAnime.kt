@@ -255,6 +255,18 @@ override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallbac
         Log.e("TRANM", "Error in loadLinks: ${e.message}")
     }
     
+    // Son çare: Evrensel video extractor
+    if (!foundLinks) {
+        Log.d("TRANM", "Trying UniversalVideoExtractor as last resort...")
+        foundLinks = UniversalVideoExtractor.extractVideo(
+            url = data,
+            mainUrl = mainUrl,
+            logTag = "TRANM",
+            subtitleCallback = subtitleCallback,
+            callback = callback
+        )
+    }
+    
     Log.d("TRANM", "TurkAnime extraction completed. Found links: $foundLinks")
     return foundLinks
 }

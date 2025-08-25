@@ -262,6 +262,18 @@ private fun Element.toSearchResult(): SearchResponse? {
             Log.e("FLMM", "Error in loadLinks: ${e.message}")
         }
         
+        // Son çare: Evrensel video extractor
+        if (!foundLinks) {
+            Log.d("FLMM", "Trying UniversalVideoExtractor as last resort...")
+            foundLinks = UniversalVideoExtractor.extractVideo(
+                url = data,
+                mainUrl = mainUrl,
+                logTag = "FLMM",
+                subtitleCallback = subtitleCallback,
+                callback = callback
+            )
+        }
+        
         Log.d("FLMM", "FilmMakinesi extraction completed. Found links: $foundLinks")
         return foundLinks
 }
