@@ -414,7 +414,7 @@ class HDFilmCehennemi : MainAPI() {
                                     source = "$source (Rapidrame)",
                                     name = "Rapidrame",
                                     url = videoUrl,
-                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.MP4
+                                    type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.M3U8
                                 ) {
                                     this.headers = headers + mapOf("Referer" to url)
                                     this.quality = Qualities.Unknown.value
@@ -496,7 +496,7 @@ class HDFilmCehennemi : MainAPI() {
                                             source = "$source (Closed)",
                                             name = "Closed",
                                             url = videoUrl,
-                                            type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.MP4
+                                            type = if (videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.M3U8
                                         ) {
                                             this.headers = headers + mapOf("Referer" to url)
                                             this.quality = Qualities.Unknown.value
@@ -556,7 +556,7 @@ class HDFilmCehennemi : MainAPI() {
                             source = "$source (Sibnet)",
                             name = "Sibnet",
                             url = videoSrc,
-                            type = ExtractorLinkType.MP4
+                            type = ExtractorLinkType.M3U8
                         ) {
                             this.headers = headers + mapOf("Referer" to url)
                             this.quality = Qualities.Unknown.value
@@ -579,7 +579,7 @@ class HDFilmCehennemi : MainAPI() {
                                     source = "$source (Sibnet)",
                                     name = "Sibnet", 
                                     url = videoUrl,
-                                    type = ExtractorLinkType.MP4
+                                    type = ExtractorLinkType.M3U8
                                 ) {
                                     this.headers = headers + mapOf("Referer" to url)
                                     this.quality = Qualities.Unknown.value
