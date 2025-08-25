@@ -1,0 +1,8 @@
+{
+  "name": "Kekik CloudStream Extensions | @KekikAkademi",
+  "description": "🔥 Türkiye'nin en kapsamlı CloudStream eklenti koleksiyonu - Optimize edilmiş tüm popüler siteler",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/Mehmet020202/kekikdeneme9/builds/plugins.json"
+  ]
+}
