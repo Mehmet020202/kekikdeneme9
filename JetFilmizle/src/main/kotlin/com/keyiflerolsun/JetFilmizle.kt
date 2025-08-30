@@ -31,7 +31,7 @@ private fun getIDMHeaders() = mapOf(
 )
 
 class JetFilmizle : MainAPI() {
-    override var mainUrl              = "https://jetfilmizle.so"
+    override var mainUrl              = "https://jetfilmizle.ltd"
     override var name                 = "JetFilmizle"
     override val hasMainPage          = true
     override var lang                 = "tr"
